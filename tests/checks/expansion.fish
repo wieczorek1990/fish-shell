@@ -1,16 +1,16 @@
 # RUN: fish=%fish %fish %s
 
 # caret position (#5812)
-printf '<%s>\n' ($fish -c ' $f[a]' 2>&1)
+$fish -c ' $f[a]'
 
-# CHECK: <fish: Invalid index value>
-# CHECK: < $f[a]>
-# CHECK: <    ^>
+# CHECKERR: fish: Invalid index value
+# CHECKERR: {{^}} $f[a]
+# CHECKERR: {{^}}    ^
 
-printf '<%s>\n' ($fish -c 'if $f[a]; end' 2>&1)
-# CHECK: <fish: Invalid index value>
-# CHECK: <if $f[a]; end>
-# CHECK: <      ^>
+$fish -c 'if $f[a]; end'
+# CHECKERR: fish: Invalid index value
+# CHECKERR: {{^}}if $f[a]; end
+# CHECKERR: {{^}}      ^
 
 set a A
 set aa AA
@@ -225,33 +225,33 @@ expansion $foo[2..-1]
 #CHECK: 0
 expansion $foo[0]
 #CHECKERR: {{.*}}expansion.fish (line {{\d+}}): array indices start at 1, not 0.
-#CHECKERR: expansion $foo[0]
-#CHECKERR: ^
+#CHECKERR: {{^}}expansion $foo[0]
+#CHECKERR: {{^}}               ^
 # see https://github.com/fish-shell/fish-shell/issues/8213
 expansion $foo[1..0]
 #CHECKERR: {{.*}}expansion.fish (line {{\d+}}): array indices start at 1, not 0.
-#CHECKERR: expansion $foo[1..0]
-#CHECKERR: ^
+#CHECKERR: {{^}}expansion $foo[1..0]
+#CHECKERR: {{^}}                  ^
 expansion $foo[-0]
 #CHECKERR: {{.*}}expansion.fish (line {{\d+}}): array indices start at 1, not 0.
-#CHECKERR: expansion $foo[-0]
-#CHECKERR: ^
+#CHECKERR: {{^}}expansion $foo[-0]
+#CHECKERR: {{^}}               ^
 
 echo "$foo[d]"
 #CHECKERR: {{.*}}expansion.fish (line {{\d+}}): Invalid index value
-#CHECKERR: echo "$foo[d]"
-#CHECKERR: ^
+#CHECKERR: {{^}}echo "$foo[d]"
+#CHECKERR: {{^}}           ^
 echo $foo[d]
 #CHECKERR: {{.*}}expansion.fish (line {{\d+}}): Invalid index value
-#CHECKERR: echo $foo[d]
-#CHECKERR: ^
+#CHECKERR: {{^}}echo $foo[d]
+#CHECKERR: {{^}}          ^
 
 echo ()[1]
 # No output
 echo ()[d]
 #CHECKERR: {{.*}}expansion.fish (line {{\d+}}): Invalid index value
-#CHECKERR: echo ()[d]
-#CHECKERR: ^
+#CHECKERR: {{^}}echo ()[d]
+#CHECKERR: {{^}}        ^
 
 set -l outer out1 out2
 set -l inner 1 2
@@ -270,8 +270,8 @@ echo "All digits: $status"
 set paren ')'
 echo $$paren
 #CHECKERR: {{.*}}expansion.fish (line {{\d+}}): $) is not a valid variable in fish.
-#CHECKERR: echo $$paren
-#CHECKERR: ^
+#CHECKERR: {{^}}echo $$paren
+#CHECKERR: {{^}}      ^
 
 # Test tilde expansion
 # On OS X, /tmp is symlinked to /private/tmp
@@ -318,32 +318,32 @@ echo "Back to normal variable: $testvar" (count $testvar)
 # Test fatal syntax errors
 $fish -c 'echo $,foo'
 #CHECKERR: fish: Expected a variable name after this $.
-#CHECKERR: echo $,foo
-#CHECKERR: ^
+#CHECKERR: {{^}}echo $,foo
+#CHECKERR: {{^}}      ^
 $fish -c 'echo {'
 #CHECKERR: fish: Unexpected end of string, incomplete parameter expansion
-#CHECKERR: echo {
-#CHECKERR: ^
+#CHECKERR: {{^}}echo {
+#CHECKERR: {{^}}     ^
 $fish -c 'echo {}}'
 #CHECKERR: fish: Unexpected '}' for unopened brace
-#CHECKERR: echo {}}
-#CHECKERR: ^
-printf '<%s>\n' ($fish -c 'command (asd)' 2>&1)
-#CHECK: <fish: command substitutions not allowed in command position. Try var=(your-cmd) $var ...>
-#CHECK: <command (asd)>
-#CHECK: <        ^~~~^>
+#CHECKERR: {{^}}echo {}}
+#CHECKERR: {{^}}       ^
+$fish -c 'command (asd)'
+#CHECKERR: fish: command substitutions not allowed in command position. Try var=(your-cmd) $var ...
+#CHECKERR: {{^}}command (asd)
+#CHECKERR: {{^}}        ^~~~^
 true
 
-printf '<%s>\n' ($fish -c 'echo "$abc["' 2>&1)
-#CHECK: <fish: Invalid index value>
-#CHECK: <echo "$abc[">
-#CHECK: <           ^>
+$fish -c 'echo "$abc["'
+#CHECKERR: fish: Invalid index value
+#CHECKERR: {{^}}echo "$abc["
+#CHECKERR: {{^}}           ^
 
 set -l pager command less
 echo foo | $pager
 #CHECKERR: {{.*}}checks/expansion.fish (line {{\d+}}): The expanded command is a keyword.
-#CHECKERR: echo foo | $pager
-#CHECKERR:            ^~~~~^
+#CHECKERR: {{^}}echo foo | $pager
+#CHECKERR: {{^}}           ^~~~~^
 
 command -h
 #CHECKERR: Documentation for command

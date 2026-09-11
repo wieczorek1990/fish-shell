@@ -142,6 +142,6 @@ echo $status
 PATH= cat || echo cat failed
 # CHECKERR: fish: Unknown command: cat
 # CHECKERR: {{.*}}/andandoror.fish (line 142):
-# CHECKERR: PATH= cat || echo cat failed
-# CHECKERR:       ^~^
+# CHECKERR: {{^}}PATH= cat || echo cat failed
+# CHECKERR: {{^}}      ^~^
 # CHECK: cat failed

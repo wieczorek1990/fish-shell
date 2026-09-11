@@ -470,8 +470,8 @@ for a,b in y 1 z 3
     echo $a,$b
 end
 # CHECKERR: {{.*}} for: a,b: invalid variable name. See `help language#shell-variable-and-function-names`
-# CHECKERR: for a,b in y 1 z 3
-# CHECKERR:     ^~^
+# CHECKERR: {{^}}for a,b in y 1 z 3
+# CHECKERR: {{^}}    ^~^
 
 # Global vs Universal Unspecified Scopes
 set -U __fish_test_global_vs_universal universal
@@ -529,15 +529,15 @@ sh -c 'EDITOR=vim "$@" -c "set -S EDITOR"' uselessargument $FISH | string match 
 set --show 'argle bargle'
 #CHECKERR: set: argle bargle: invalid variable name. See `help language#shell-variable-and-function-names`
 #CHECKERR: {{.*}}set.fish (line {{\d+}}):
-#CHECKERR: set --show 'argle bargle'
-#CHECKERR: ^
+#CHECKERR: {{^}}set --show 'argle bargle'
+#CHECKERR: {{^}}^
 #CHECKERR: (Type 'help set' for related documentation)
 
 set --show array[1]
 # CHECKERR: set: `set --show` does not allow slices with the var names
 # CHECKERR: {{.*}}set.fish (line {{\d+}}):
-# CHECKERR: set --show array[1]
-# CHECKERR: ^
+# CHECKERR: {{^}}set --show array[1]
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help set' for related documentation)
 
 # Verify behavior of `set --show`
@@ -628,27 +628,27 @@ set --show var5
 set -a
 # CHECKERR: set: expected >= 1 arguments; got 0
 # CHECKERR: {{.*}}checks/set.fish (line {{\d+}}):
-# CHECKERR: set -a
-# CHECKERR: ^
+# CHECKERR: {{^}}set -a
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help set' for related documentation)
 set -p
 # CHECKERR: set: expected >= 1 arguments; got 0
 # CHECKERR: {{.*}}checks/set.fish (line {{\d+}}):
-# CHECKERR: set -p
-# CHECKERR: ^
+# CHECKERR: {{^}}set -p
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help set' for related documentation)
 
 set -a foo[1]
 # CHECKERR: set: Cannot use --append or --prepend when assigning to a slice
 # CHECKERR: {{.*}}checks/set.fish (line {{\d+}}):
-# CHECKERR: set -a foo[1]
-# CHECKERR: ^
+# CHECKERR: {{^}}set -a foo[1]
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help set' for related documentation)
 set -p foo[1]
 # CHECKERR: set: Cannot use --append or --prepend when assigning to a slice
 # CHECKERR: {{.*}}checks/set.fish (line {{\d+}}):
-# CHECKERR: set -p foo[1]
-# CHECKERR: ^
+# CHECKERR: {{^}}set -p foo[1]
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help set' for related documentation)
 
 # Setting local scope when no local scope of the var uses the closest scope
@@ -803,23 +803,23 @@ true
 set "" foo
 #CHECKERR: set: : invalid variable name. See `help language#shell-variable-and-function-names`
 #CHECKERR: {{.*}}set.fish (line {{\d+}}):
-#CHECKERR: set "" foo
-#CHECKERR: ^
+#CHECKERR: {{^}}set "" foo
+#CHECKERR: {{^}}^
 #CHECKERR: (Type 'help set' for related documentation)
 
 set --show ""
 #CHECKERR: set: : invalid variable name. See `help language#shell-variable-and-function-names`
 #CHECKERR: {{.*}}set.fish (line {{\d+}}):
-#CHECKERR: set --show ""
-#CHECKERR: ^
+#CHECKERR: {{^}}set --show ""
+#CHECKERR: {{^}}^
 #CHECKERR: (Type 'help set' for related documentation)
 
 set foo="ba nana"
 #CHECKERR: set: foo=ba nana: invalid variable name. See `help language#shell-variable-and-function-names`
 #CHECKERR: set: Did you mean `set foo 'ba nana'`?
 #CHECKERR: {{.*}}set.fish (line {{\d+}}):
-#CHECKERR: set foo="ba nana"
-#CHECKERR: ^
+#CHECKERR: {{^}}set foo="ba nana"
+#CHECKERR: {{^}}^
 #CHECKERR: (Type 'help set' for related documentation)
 # Test path splitting
 begin
@@ -987,8 +987,8 @@ echo $secret
 set -e
 # CHECKERR: set: --erase: option requires an argument
 # CHECKERR: {{.*}}set.fish (line {{\d+}}):
-# CHECKERR: set -e
-# CHECKERR: ^
+# CHECKERR: {{^}}set -e
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help set' for related documentation)
 
 while set -e undefined
@@ -997,15 +997,15 @@ end
 set -e undefined[x..]
 # CHECKERR: set: Invalid index starting at 'x..]'
 # CHECKERR: {{.*}}checks/set.fish (line {{\d+}}):
-# CHECKERR: set -e undefined[x..]
-# CHECKERR: ^
+# CHECKERR: {{^}}set -e undefined[x..]
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help set' for related documentation)
 
 set -e undefined[..y]
 # CHECKERR: set: Invalid index starting at 'y]'
 # CHECKERR: {{.*}}checks/set.fish (line {{\d+}}):
-# CHECKERR: set -e undefined[..y]
-# CHECKERR: ^
+# CHECKERR: {{^}}set -e undefined[..y]
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help set' for related documentation)
 
 set -e undefined[1..]
@@ -1060,8 +1060,8 @@ env XDG_CONFIG_HOME= HOME=$PWD/empty LC_ALL=en_US.UTF-8 $FISH -c 'set -S LC_ALL'
 set line[0] ""
 # CHECKERR: set: array index out of bounds
 # CHECKERR: {{.*}}set.fish (line {{\d+}}):
-# CHECKERR: set line[0] ""
-# CHECKERR: ^
+# CHECKERR: {{^}}set line[0] ""
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help set' for related documentation)
 
 echo Still here
@@ -1086,67 +1086,82 @@ set -o ed
 set -q -e foo
 # CHECKERR: set: invalid option combination
 # CHECKERR: {{.*}}set.fish (line {{\d+}}):
-# CHECKERR: set -q -e foo
-# CHECKERR: ^
+# CHECKERR: {{^}}set -q -e foo
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help set' for related documentation)
 
 set -q -n
 # CHECKERR: set: invalid option combination
 # CHECKERR: {{.*}}set.fish (line {{\d+}}):
-# CHECKERR: set -q -n
-# CHECKERR: ^
+# CHECKERR: {{^}}set -q -n
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help set' for related documentation)
 
 set -e -n
 # CHECKERR: set: invalid option combination
 # CHECKERR: {{.*}}set.fish (line {{\d+}}):
-# CHECKERR: set -e -n
-# CHECKERR: ^
+# CHECKERR: {{^}}set -e -n
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help set' for related documentation)
 
 set -l -g foo bar
 # CHECKERR: set: scope can be only one of: universal function global local
 # CHECKERR: {{.*}}set.fish (line {{\d+}}):
-# CHECKERR: set -l -g foo bar
-# CHECKERR: ^
+# CHECKERR: {{^}}set -l -g foo bar
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help set' for related documentation)
 
 set -u -x foo
 # CHECKERR: set: cannot both export and unexport
 # CHECKERR: {{.*}}set.fish (line {{\d+}}):
-# CHECKERR: set -u -x foo
-# CHECKERR: ^
+# CHECKERR: {{^}}set -u -x foo
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help set' for related documentation)
 
 set -e -x foo
 # CHECKERR: set: invalid option combination
 # CHECKERR: {{.*}}set.fish (line {{\d+}}):
-# CHECKERR: set -e -x foo
-# CHECKERR: ^
+# CHECKERR: {{^}}set -e -x foo
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help set' for related documentation)
 
 set -e -u foo
 # CHECKERR: set: invalid option combination
 # CHECKERR: {{.*}}set.fish (line {{\d+}}):
-# CHECKERR: set -e -u foo
-# CHECKERR: ^
+# CHECKERR: {{^}}set -e -u foo
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help set' for related documentation)
 
 set --path --unpath foo
 # CHECKERR: set: cannot both path and unpath
 # CHECKERR: {{.*}}set.fish (line {{\d+}}):
-# CHECKERR: set --path --unpath foo
-# CHECKERR: ^
+# CHECKERR: {{^}}set --path --unpath foo
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help set' for related documentation)
 
 set -s -l
 # CHECKERR: set: invalid option combination
 # CHECKERR: {{.*}}set.fish (line {{\d+}}):
-# CHECKERR: set -s -l
-# CHECKERR: ^
+# CHECKERR: {{^}}set -s -l
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help set' for related documentation)
 
 set umask abc
 # CHECKERR: set: Tried to modify the special variable 'umask' to an invalid value
+
+# Almost all electric variables are read-only.
+set -e FISH_VERSION
+echo $status
+# CHECKERR: set: Tried to change the read-only variable 'FISH_VERSION'
+# CHECK: 1
+set -e status
+echo $status
+# CHECKERR: set: Tried to change the read-only variable 'status'
+# CHECK: 1
+
+# This is the only electric variable that's read-write. Could add a better error here.
+set -e umask
+echo $status
+# CHECK: 4
 
 exit 0

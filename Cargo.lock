@@ -324,10 +324,9 @@ checksum = "5baebc0774151f905a1a2cc41989300b1e6fbb29aff0ceffa1064fdd3088d582"
 
 [[package]]
 name = "fish"
-version = "4.8.1"
+version = "4.9.3"
 dependencies = [
  "assert_matches",
- "bitflags",
  "cc",
  "cfg-if",
  "fish-build-helper",
@@ -397,7 +396,6 @@ dependencies = [
 name = "fish-common"
 version = "0.0.0"
 dependencies = [
- "bitflags",
  "fish-build-helper",
  "fish-feature-flags",
  "fish-widestring",

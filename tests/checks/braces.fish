@@ -88,8 +88,8 @@ e{cho,cho,cho}
 PATH= {echo,hello}
 # CHECKERR: fish: Unknown command: echo,hello
 # CHECKERR: {{.*}}/braces.fish (line {{\d+}}):
-# CHECKERR: PATH= {echo,hello}
-# CHECKERR:        ^~~~~~~~~^
+# CHECKERR: {{^}}PATH= {echo,hello}
+# CHECKERR: {{^}}       ^~~~~~~~~^
 
 function foo,
     echo foo,
@@ -105,13 +105,13 @@ end
 set -l fish (status fish-path)
 $fish -c '{ :; } true'
 # CHECKERR: fish: '}' does not take arguments. Did you forget a ';'?
-# CHECKERR: { :; } true
-# CHECKERR:        ^~~^
+# CHECKERR: {{^}}{ :; } true
+# CHECKERR: {{^}}       ^~~^
 
 $fish -c '{$HOME}/bin'
 # CHECKERR: fish: '}' does not take arguments. Did you forget a ';'?
-# CHECKERR: {$HOME}/bin
-# CHECKERR:        ^~~^
+# CHECKERR: {{^}}{$HOME}/bin
+# CHECKERR: {{^}}       ^~~^
 
 ; { echo semi; }
 # CHECK: semi
@@ -201,25 +201,25 @@ $fish -c '{'
 PATH= "{"
 # CHECKERR: fish: Unknown command: '{'
 # CHECKERR: {{.*}}/braces.fish (line {{\d+}}):
-# CHECKERR: PATH= "{"
-# CHECKERR:       ^~^
+# CHECKERR: {{^}}PATH= "{"
+# CHECKERR: {{^}}      ^~^
 
 $fish -c 'builtin {'
 # CHECKERR: fish: Expected end of the statement, but found a '{'
-# CHECKERR: builtin {
-# CHECKERR:      ^
+# CHECKERR: {{^}}builtin {
+# CHECKERR: {{^}}        ^
 
 $fish -c 'command {'
 # CHECKERR: fish: Expected end of the statement, but found a '{'
-# CHECKERR: command {
-# CHECKERR:         ^
+# CHECKERR: {{^}}command {
+# CHECKERR: {{^}}        ^
 
 $fish -c 'exec {'
 # CHECKERR: fish: Expected end of the statement, but found a '{'
-# CHECKERR: exec {
-# CHECKERR:      ^
+# CHECKERR: {{^}}exec {
+# CHECKERR: {{^}}     ^
 
 $fish -c 'begin; }'
 # CHECKERR: fish: Unexpected '}' for unopened brace
-# CHECKERR: begin; }
-# CHECKERR:        ^
+# CHECKERR: {{^}}begin; }
+# CHECKERR: {{^}}       ^

@@ -7,8 +7,8 @@ use crate::{
     env::{EnvMode, EnvStack, EnvStackSetResult, Environment},
     exec::exec_subshell,
     expand::{
-        ExpandFlags, ExpandResultCode, expand_escape_string, expand_escape_variable, expand_one,
-        expand_string, expand_to_receiver,
+        self, ExpandFlags, ExpandResultCode, ForCdArgument, PathFilter, expand_escape_string,
+        expand_escape_variable, expand_one, expand_string, expand_to_receiver,
     },
     flog::{flog, flogf},
     function,
@@ -27,7 +27,6 @@ use crate::{
     wutil::wrealpath,
 };
 use assert_matches::assert_matches;
-use bitflags::bitflags;
 use fish_common::{ScopeGuard, UnescapeFlags, UnescapeStringStyle, escape, unescape_string};
 use fish_util::wcsfilecmp;
 use fish_wcstringutil::{
@@ -41,7 +40,7 @@ use std::{
     mem,
     ops::{Deref, DerefMut},
     sync::{
-        LazyLock, Mutex, MutexGuard,
+        Arc, LazyLock, Mutex, MutexGuard,
         atomic::{self, AtomicUsize},
     },
     time::{Duration, Instant},
@@ -64,46 +63,148 @@ localizable_consts!(
     ABBR_DESC "Abbreviation: %s"
 );
 
+/// Whether to allow file completions.
+/// Note this is in ascending priority order: --force-files beats --no-files.
+/// Between items in a wrap chain, the first policy other than "Inherit" wins.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub enum FileCompletionPolicy {
+    #[default]
+    Inherit, // Defer to surrounding completion logic
+    Skip,  // No file completions: --no-files or --exclusive
+    Force, // Always perform: --force-files
+}
+
+/// Controls the behavior of completing an argument after a switch.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
-pub struct CompletionMode {
-    /// If set, skip file completions.
-    pub no_files: bool,
-    pub force_files: bool,
+pub struct ArgumentPolicy {
+    /// Whether to perform file completions.
+    pub files: FileCompletionPolicy,
 
     /// If set, require a parameter after completion.
+    /// Only applies to option-arguments.
     pub requires_param: bool,
 }
 
 /// Character that separates the completion and description on programmable completions.
 pub const PROG_COMPLETE_SEP: char = '\t';
 
-bitflags! {
-    #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-    pub struct CompleteFlags: u16 {
-        /// Do not insert space afterwards if this is the only completion. (The default is to try insert
-        /// a space).
-        const NO_SPACE = 1 << 0;
-        /// This is not the suffix of a token, but replaces it entirely.
-        const REPLACES_TOKEN = 1 << 1;
-        /// This completion may or may not want a space at the end - guess by checking the last
-        /// character of the completion.
-        const AUTO_SPACE = 1 << 2;
-        /// This completion should be inserted as-is, without escaping.
-        const DONT_ESCAPE = 1 << 3;
-        /// If you do escape, don't escape tildes.
-        const DONT_ESCAPE_TILDES = 1 << 4;
-        /// Do not sort supplied completions
-        const DONT_SORT = 1 << 5;
-        /// This completion looks to have the same string as an existing argument.
-        const DUPLICATES_ARGUMENT = 1 << 6;
-        /// This completes not just a token but replaces an entire line.
-        const REPLACES_LINE = 1 << 7;
-        /// If replacing the entire token, keep the "foo=" prefix.
-        const KEEP_VARIABLE_OVERRIDE_PREFIX = 1 << 8;
-        /// This is a variable name.
-        const VARIABLE_NAME = 1 << 9;
-        /// Suppress showing the pager prefix for this completion.
-        const SUPPRESS_PAGER_PREFIX = 1 << 10;
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct SuffixType {
+    // The completion is a variable name, so we may insert a slash instead of space.
+    pub for_variable_name: bool,
+}
+
+impl SuffixType {
+    const DEFAULT: Self = Self {
+        for_variable_name: false,
+    };
+}
+
+/// Whether to insert a (space) suffix when this completion is selected.
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum WantsSuffix {
+    Yes(SuffixType),
+    No,
+    /// This completion may or may not want a space at the end - guess by checking the last
+    /// character of the completion.
+    Auto,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct WillReplaceToken {
+    pub show_pager_prefix: bool,
+}
+
+impl Default for WillReplaceToken {
+    fn default() -> Self {
+        Self {
+            show_pager_prefix: true,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum ReplacementScope {
+    /// This is not the suffix of a token, but replaces it entirely.
+    Token(WillReplaceToken),
+    /// This completes not just a token but replaces an entire line.
+    Line,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum WantsEscaping {
+    Yes {
+        escape_tildes: bool,
+    },
+    /// This completion should be inserted as-is, without escaping.
+    No,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct CompleteFlags {
+    /// This is not the suffix of a token, but replaces part of the commandline.
+    pub replaces: Option<ReplacementScope>,
+    /// Whether to insert a (space) suffix when this completion is selected.
+    pub wants_suffix: WantsSuffix,
+    /// How this completion should be escaped before insertion.
+    pub wants_escaping: WantsEscaping,
+    /// Do not sort supplied completions
+    pub dont_sort: bool,
+    /// This completion looks to have the same string as an existing argument.
+    pub duplicates_argument: bool,
+    /// If replacing the entire token, keep the "foo=" prefix.
+    pub keep_variable_override_prefix: bool,
+}
+
+impl Default for CompleteFlags {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl CompleteFlags {
+    const DEFAULT: Self = Self {
+        replaces: None,
+        wants_suffix: WantsSuffix::Yes(SuffixType::DEFAULT),
+        wants_escaping: WantsEscaping::Yes {
+            escape_tildes: true,
+        },
+        dont_sort: false,
+        duplicates_argument: false,
+        keep_variable_override_prefix: false,
+    };
+    pub(crate) const NO_SPACE: Self = Self {
+        wants_suffix: WantsSuffix::No,
+        ..Self::DEFAULT
+    };
+
+    /// Returns whether this replaces its token.
+    pub(crate) fn replaces_token(&self) -> bool {
+        matches!(self.replaces, Some(ReplacementScope::Token(_)))
+    }
+
+    /// Returns whether this replaces an entire line.
+    pub(crate) fn replaces_line(&self) -> bool {
+        self.replaces == Some(ReplacementScope::Line)
+    }
+
+    pub(crate) fn suffix_type(&self) -> Option<SuffixType> {
+        match self.wants_suffix {
+            WantsSuffix::Yes(st) => Some(st),
+            WantsSuffix::No => None,
+            WantsSuffix::Auto => panic!(),
+        }
+    }
+
+    pub(crate) fn wants_escaping(&self) -> bool {
+        matches!(self.wants_escaping, WantsEscaping::Yes { .. })
+    }
+
+    pub(crate) fn dont_escape_tildes(&mut self) {
+        match &mut self.wants_escaping {
+            WantsEscaping::Yes { escape_tildes } => *escape_tildes = false,
+            WantsEscaping::No => panic!(),
+        }
     }
 }
 
@@ -119,7 +220,7 @@ pub fn const_desc(s: &wstr) -> DescriptionFunc {
 pub type CompletionList = Vec<Completion>;
 
 /// This is an individual completion entry, i.e. the result of an expansion of a completion rule.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Completion {
     /// The completion string.
     pub completion: WString,
@@ -156,11 +257,11 @@ impl Completion {
         completion: WString,
         description: WString,
         r#match: StringFuzzyMatch, /* = exact_match */
-        flags: CompleteFlags,
+        mut flags: CompleteFlags,
     ) -> Self {
-        let mut flags = resolve_auto_space(&completion, flags);
-        if r#match.requires_full_replacement() {
-            flags |= CompleteFlags::REPLACES_TOKEN;
+        resolve_auto_space(&completion, &mut flags.wants_suffix);
+        if r#match.requires_full_replacement() && !flags.replaces_line() {
+            flags.replaces = Some(ReplacementScope::Token(Default::default()));
         }
         Self {
             completion,
@@ -179,18 +280,39 @@ impl Completion {
             completion,
             description,
             StringFuzzyMatch::exact_match(),
-            CompleteFlags::empty(),
+            CompleteFlags::default(),
         )
     }
 
     /// Returns whether this replaces its token.
-    pub fn replaces_token(&self) -> bool {
-        self.flags.contains(CompleteFlags::REPLACES_TOKEN)
+    pub fn set_replaces_token(&mut self) -> bool {
+        if self.replaces_token() {
+            return false;
+        }
+        let old = self
+            .flags
+            .replaces
+            .replace(ReplacementScope::Token(Default::default()));
+        assert!(old.is_none());
+        true
     }
 
-    /// Returns whether this replaces the entire commandline.
+    /// Returns whether this replaces its token.
+    pub fn replaces_token(&self) -> bool {
+        self.flags.replaces_token()
+    }
+
+    /// Whether this completion wants the pager to to show the prefix shared among completions.
+    pub(crate) fn wants_pager_prefix(&self) -> bool {
+        self.flags.replaces.is_none_or(|replaces| match replaces {
+            ReplacementScope::Token(will_replace_token) => will_replace_token.show_pager_prefix,
+            ReplacementScope::Line => true,
+        })
+    }
+
+    /// Returns whether this replaces an entire line.
     pub fn replaces_line(&self) -> bool {
-        self.flags.contains(CompleteFlags::REPLACES_LINE)
+        self.flags.replaces_line()
     }
 
     /// Returns the completion's match rank. Lower ranks are better completions.
@@ -206,23 +328,26 @@ impl Completion {
     }
 }
 
-impl CompletionRequestOptions {
-    /// Options for an autosuggestion.
-    pub fn autosuggest() -> Self {
-        Self {
-            autosuggestion: true,
-            descriptions: false,
-            fuzzy_match: false,
-        }
-    }
+#[derive(Clone, Copy, Default)]
+pub enum CompletionRequestOptions {
+    /// Ordinary completion
+    #[default]
+    Completion,
+    /// Requesting autosuggestion
+    Autosuggestion,
+}
 
-    /// Options for a "normal" completion.
-    pub fn normal() -> Self {
-        Self {
-            autosuggestion: false,
-            descriptions: true,
-            fuzzy_match: true,
-        }
+impl CompletionRequestOptions {
+    fn autosuggestion(&self) -> bool {
+        matches!(*self, CompletionRequestOptions::Autosuggestion)
+    }
+    /// Making descriptions?
+    fn descriptions(&self) -> bool {
+        !self.autosuggestion()
+    }
+    /// If true, we do not require a prefix match
+    fn fuzzy_match(&self) -> bool {
+        !self.autosuggestion()
     }
 }
 
@@ -253,6 +378,10 @@ impl DerefMut for CompletionReceiver {
     }
 }
 
+// An error returned when adding a completion exceeded the max allowed completions.
+#[derive(Debug)]
+pub struct CompletionOverflow;
+
 impl CompletionReceiver {
     /// Construct as empty, with a limit.
     pub fn new(limit: usize) -> Self {
@@ -268,26 +397,24 @@ impl CompletionReceiver {
     }
 
     /// Add a completion.
-    /// Return true on success, false if this would overflow the limit.
-    #[must_use]
-    pub fn add(&mut self, comp: impl Into<Completion>) -> bool {
+    /// Returns an error if this would overflow the limit.
+    pub fn add(&mut self, comp: impl Into<Completion>) -> Result<(), CompletionOverflow> {
         if self.completions.len() >= self.limit {
-            return false;
+            return Err(CompletionOverflow);
         }
         self.completions.push(comp.into());
-        true
+        Ok(())
     }
 
-    /// Adds a completion with the given string, and default other properties. Returns `true` on
-    /// success, `false` if this would overflow the limit.
-    #[must_use]
+    /// Adds a completion with the given string, and default other properties.
+    /// Returns an error if this would overflow the limit.
     pub fn extend(
         &mut self,
         iter: impl IntoIterator<Item = Completion, IntoIter = impl ExactSizeIterator<Item = Completion>>,
-    ) -> bool {
+    ) -> Result<(), CompletionOverflow> {
         let iter = iter.into_iter();
         if iter.len() > self.limit - self.completions.len() {
-            return false;
+            return Err(CompletionOverflow);
         }
         self.completions.extend(iter);
         // this only fails if the ExactSizeIterator impl is bogus
@@ -296,7 +423,7 @@ impl CompletionReceiver {
             "ExactSizeIterator returned more items than it should"
         );
 
-        true
+        Ok(())
     }
 
     /// Clear the list of completions. This retains the storage inside `completions` which can be
@@ -341,7 +468,7 @@ impl CompletionReceiver {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum CompleteOptionType {
     /// no option
     ArgsOnly,
@@ -374,11 +501,11 @@ struct CompleteEntryOpt {
     /// Description of the completion.
     desc: LocalizableString,
     /// Conditions under which to use the option, expanded and evaluated at completion time.
-    conditions: Vec<WString>,
+    conditions: Box<[WString]>,
     /// Type of the option: `ArgsOnly`, `Short`, `SingleLong`, or `DoubleLong`.
     typ: CompleteOptionType,
     /// Determines how completions should be performed on the argument after the switch.
-    result_mode: CompletionMode,
+    argument_policy: ArgumentPolicy,
     /// Completion flags.
     flags: CompleteFlags,
 }
@@ -396,20 +523,24 @@ impl CompleteEntryOpt {
 /// Last value used in the order field of [`CompletionEntry`].
 static COMPLETE_ORDER: AtomicUsize = AtomicUsize::new(0);
 
+#[derive(Clone)]
 struct CompletionEntry {
     /// List of all options.
+    /// The most recently added options are at the end; use the iter() method to iterate in recency order.
     options: Vec<CompleteEntryOpt>,
     /// Order for when this completion was created. This aids in outputting completions sorted by
     /// time.
     order: usize,
 }
 
+type CompletionEntryIter<'a> = std::iter::Rev<std::slice::Iter<'a, CompleteEntryOpt>>;
+
 impl CompletionEntry {
-    pub fn new() -> Self {
-        Self {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
             options: vec![],
             order: COMPLETE_ORDER.fetch_add(1, atomic::Ordering::Relaxed),
-        }
+        })
     }
 
     /// Getters for option list.
@@ -430,15 +561,32 @@ impl CompletionEntry {
             .retain(|opt| opt.option != option || opt.typ != typ);
         self.options.is_empty()
     }
+
+    // Return an iterator over the entry options from most recently added to least recent.
+    fn iter<'a>(&'a self) -> CompletionEntryIter<'a> {
+        // Reverse, so later items are returned first.
+        self.options.iter().rev()
+    }
+}
+
+impl<'a> IntoIterator for &'a CompletionEntry {
+    type Item = &'a CompleteEntryOpt;
+    type IntoIter = CompletionEntryIter<'a>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
 }
 
 /// Set of all completion entries. Keyed by the command name, and whether it is a path.
-#[derive(Clone, Debug, PartialOrd, Ord, PartialEq, Eq, Hash)]
-struct CompletionEntryIndex {
+#[derive(Clone, Debug, Eq, Ord, PartialOrd, PartialEq, Hash)]
+struct CompletionEntryKey {
     name: WString,
     is_path: bool,
 }
-type CompletionEntryMap = BTreeMap<CompletionEntryIndex, CompletionEntry>;
+
+/// CompletionEntries are stored in an Arc so options can be read outside of the global
+/// completion lock without copying everything. `make_mut()` is used during mtuations.
+type CompletionEntryMap = BTreeMap<CompletionEntryKey, Arc<CompletionEntry>>;
 static COMPLETION_MAP: Mutex<CompletionEntryMap> = Mutex::new(BTreeMap::new());
 static COMPLETION_TOMBSTONES: Mutex<BTreeSet<WString>> = Mutex::new(BTreeSet::new());
 
@@ -446,17 +594,22 @@ static COMPLETION_TOMBSTONES: Mutex<BTreeSet<WString>> = Mutex::new(BTreeSet::ne
 type WrapperMap = HashMap<WString, Vec<WString>>;
 static WRAPPER_MAP: LazyLock<Mutex<WrapperMap>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
-/// Clear the [`CompleteFlags::AUTO_SPACE`] flag, and set [`CompleteFlags::NO_SPACE`] appropriately
-/// depending on the suffix of the string.
-fn resolve_auto_space(comp: &wstr, mut flags: CompleteFlags) -> CompleteFlags {
-    if flags.contains(CompleteFlags::AUTO_SPACE) {
-        flags -= CompleteFlags::AUTO_SPACE;
-        if let Some('/' | '=' | '@' | ':' | '.' | ',' | '-') = comp.as_char_slice().last() {
-            flags |= CompleteFlags::NO_SPACE;
+/// Replace `WantsSuffix::Auto` appropriately depending on the suffix of the string.
+fn resolve_auto_space(comp: &wstr, wants_suffix: &mut WantsSuffix) {
+    use WantsSuffix::*;
+    match *wants_suffix {
+        Yes(_) | No => (),
+        Auto => {
+            *wants_suffix = if matches!(
+                comp.as_char_slice().last(),
+                Some('/' | '=' | '@' | ':' | '.' | ',' | '-')
+            ) {
+                No
+            } else {
+                Yes(SuffixType::DEFAULT)
+            }
         }
     }
-
-    flags
 }
 
 // If these functions aren't force inlined, it is actually faster to call
@@ -464,14 +617,14 @@ fn resolve_auto_space(comp: &wstr, mut flags: CompleteFlags) -> CompleteFlags {
 
 #[inline(always)]
 fn natural_compare_completions(a: &Completion, b: &Completion) -> Ordering {
-    if (a.flags & b.flags).contains(CompleteFlags::DONT_SORT) {
+    if a.flags.dont_sort && b.flags.dont_sort {
         // Both completions are from a source with the --keep-order flag.
         return Ordering::Equal;
     }
-    if (a.flags).contains(CompleteFlags::DONT_SORT) {
+    if a.flags.dont_sort {
         return Ordering::Less;
     }
-    if (b.flags).contains(CompleteFlags::DONT_SORT) {
+    if b.flags.dont_sort {
         return Ordering::Greater;
     }
     wcsfilecmp(&a.completion, &b.completion)
@@ -479,8 +632,8 @@ fn natural_compare_completions(a: &Completion, b: &Completion) -> Ordering {
 
 #[inline(always)]
 fn compare_completions_by_duplicate_arguments(a: &Completion, b: &Completion) -> Ordering {
-    let ad = a.flags.contains(CompleteFlags::DUPLICATES_ARGUMENT);
-    let bd = b.flags.contains(CompleteFlags::DUPLICATES_ARGUMENT);
+    let ad = a.flags.duplicates_argument;
+    let bd = b.flags.duplicates_argument;
 
     ad.cmp(&bd)
 }
@@ -536,7 +689,7 @@ pub fn sort_and_prioritize(comps: &mut Vec<Completion>, flags: CompletionRequest
     // Lastly, if this is for an autosuggestion, prefer to avoid completions that duplicate
     // arguments, and penalize files that end in tilde - they're frequently autosave files from e.g.
     // emacs. Also prefer samecase to smartcase.
-    if flags.autosuggestion {
+    if flags.autosuggestion() {
         comps.sort_by(|a, b| {
             a.r#match
                 .case_fold
@@ -557,9 +710,9 @@ struct CustomArgData<'a> {
     /// Whether a -- has been encountered, which suppresses options.
     had_ddash: bool,
     /// Whether to perform file completions.
-    /// This is an "out" parameter of the wrap chain walk: if any wrapped command suppresses file
-    /// completions this gets set to false.
-    do_file: bool,
+    /// This is an "out" parameter of the wrap chain walk: if any wrapped command has an opinion
+    /// (`--no-files` or `--force-files`), this is updated to match.
+    file_policy: FileCompletionPolicy,
     /// Depth in the wrap chain.
     wrap_depth: usize,
     /// The list of variable assignments: escaped strings of the form VAR=VAL.
@@ -576,7 +729,7 @@ impl<'a> CustomArgData<'a> {
             previous_argument: WString::new(),
             current_argument: WString::new(),
             had_ddash: false,
-            do_file: true,
+            file_policy: FileCompletionPolicy::Inherit,
             wrap_depth: 0,
             var_assignments,
             visited_wrapped_commands: HashSet::new(),
@@ -637,7 +790,7 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
 
     fn perform_for_commandline_impl(&mut self, cmdline: WString) {
         let cursor_pos = cmdline.len();
-        let is_autosuggest = self.flags.autosuggestion;
+        let is_autosuggest = self.flags.autosuggestion();
 
         // Find the process to operate on. The cursor may be past it (#1261), so backtrack
         // until we know we're no longer in a space. But the space may actually be part of the
@@ -739,7 +892,7 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
                     cur_tok.is_unterminated_brace,
                 );
                 for c in &mut self.completions[first..] {
-                    c.flags |= CompleteFlags::KEEP_VARIABLE_OVERRIDE_PREFIX;
+                    c.flags.keep_variable_override_prefix = true;
                 }
                 return;
             }
@@ -803,21 +956,25 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
                 prev = unescape_string(previous_argument, UnescapeStringStyle::default());
                 cur = unescape_string(
                     current_argument,
-                    UnescapeStringStyle::Script(UnescapeFlags::INCOMPLETE),
+                    UnescapeStringStyle::Script(UnescapeFlags {
+                        incomplete: true,
+                        ..Default::default()
+                    }),
                 );
             }
             if let (Some(prev), Some(cur)) = (prev, cur) {
                 arg_data.previous_argument = prev;
                 arg_data.current_argument = cur;
-                // Have to walk over the command and its entire wrap chain. If any command
-                // disables do_file, then they all do.
+                // Have to walk over the command and its entire wrap chain. The command
+                // itself is visited before any wrap target, so the topmost command with
+                // a file completion opinion (--no-files or --force-files) wins.
                 self.walk_wrap_chain(
                     &exp_command,
                     effective_cmdline,
                     command_range,
                     &mut arg_data,
                 );
-                do_file = arg_data.do_file;
+                do_file = arg_data.file_policy != FileCompletionPolicy::Skip;
 
                 // If we're autosuggesting, and the token is empty, don't do file suggestions.
                 if is_autosuggest && arg_data.current_argument.is_empty() {
@@ -888,11 +1045,12 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
 
     /// Return the position of the short option that may take the rest of the token as its
     /// parameter. If no such option exists, return the last valid short option in the token.
-    fn short_option_pos(&mut self, arg: &wstr, options: &[CompleteEntryOpt]) -> Option<usize> {
+    fn short_option_pos(&mut self, arg: &wstr, options: &CompletionEntry) -> Option<usize> {
         if arg.len() <= 1 || leading_dash_count(arg) != 1 {
             return None;
         }
 
+        let mut last_option_pos = None;
         for (pos, arg_char) in arg.chars().enumerate().skip(1) {
             let matched = options.iter().find(|o| {
                 o.typ == CompleteOptionType::Short
@@ -900,20 +1058,19 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
                     && self.conditions_test(&o.conditions)
             });
 
-            if let Some(matched) = matched {
-                if matched.result_mode.requires_param {
-                    return Some(pos);
-                }
-            } else {
-                // The first character after the dash is not a valid option.
-                if pos == 1 {
-                    return None;
-                }
-                return Some(pos - 1);
+            let Some(matched) = matched else {
+                // Unrecognized option - stop.
+                break;
+            };
+
+            last_option_pos = Some(pos);
+            if matched.argument_policy.requires_param {
+                // The rest of the token is the param.
+                break;
             }
         }
 
-        Some(arg.len() - 1)
+        last_option_pos
     }
 
     /// Copy any strings in `possible_comp` which have the specified prefix to the
@@ -932,19 +1089,26 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
     ///   embedded description
     /// - `possible_comp`: the list of possible completions to iterate over
     /// - `flags`: The flags controlling completion
-    /// - `extra_expand_flags`: Additional flags controlling expansion.
+    /// - `allow_nonliteral_leading_dot`: Additional flag controlling expansion.
     fn complete_strings(
         &mut self,
         wc_escaped: &wstr,
         desc_func: &DescriptionFunc,
         possible_comp: &[Completion],
         flags: CompleteFlags,
-        extra_expand_flags: ExpandFlags,
+        allow_nonliteral_leading_dot: bool,
     ) {
+        let expand_flags = ExpandFlags {
+            allow_nonliteral_leading_dot,
+            ..self.expand_flags()
+        };
         let mut tmp = wc_escaped.to_owned();
         if !expand_one(
             &mut tmp,
-            self.expand_flags() | extra_expand_flags | ExpandFlags::SKIP_WILDCARDS,
+            ExpandFlags {
+                skip_wildcards: true,
+                ..expand_flags
+            },
             self.ctx,
             None,
         ) {
@@ -955,7 +1119,6 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
         for comp in possible_comp {
             let comp_str = &comp.completion;
             if !comp_str.is_empty() {
-                let expand_flags = self.expand_flags() | extra_expand_flags;
                 wildcard_complete(
                     comp_str,
                     &wc,
@@ -969,15 +1132,20 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
     }
 
     fn expand_flags(&self) -> ExpandFlags {
-        let mut result = ExpandFlags::empty();
-        result.set(ExpandFlags::FAIL_ON_CMDSUBST, true);
-        result.set(ExpandFlags::FUZZY_MATCH, self.flags.fuzzy_match);
-        result.set(ExpandFlags::GEN_DESCRIPTIONS, self.flags.descriptions);
-        result
+        ExpandFlags {
+            cmdsubst: expand::CmdsubstMode::Fail,
+            fuzzy_match: self.flags.fuzzy_match(),
+            gen_descriptions: self.flags.descriptions(),
+            ..Default::default()
+        }
     }
 
     fn completion_expand_flags(&self) -> ExpandFlags {
-        self.expand_flags() | ExpandFlags::FOR_COMPLETIONS | ExpandFlags::PRESERVE_HOME_TILDES
+        ExpandFlags {
+            for_completions: true,
+            preserve_home_tildes: true,
+            ..self.expand_flags()
+        }
     }
 
     /// If command to complete is short enough, substitute the description with the whatis information
@@ -1104,9 +1272,10 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
     fn complete_cmd(&mut self, str_cmd: WString) {
         // Append all possible executables
         let result = {
-            let expand_flags = self.completion_expand_flags()
-                | ExpandFlags::SPECIAL_FOR_COMMAND
-                | ExpandFlags::EXECUTABLES_ONLY;
+            let expand_flags = ExpandFlags {
+                path_filter: Some(PathFilter::ExecutableFile),
+                ..self.completion_expand_flags()
+            };
             expand_to_receiver(
                 str_cmd.clone(),
                 &mut self.completions,
@@ -1119,7 +1288,7 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
         if result == ExpandResultCode::Cancel {
             return;
         }
-        if result == ExpandResultCode::Ok && self.flags.descriptions {
+        if result == ExpandResultCode::Ok && self.flags.descriptions() {
             self.complete_cmd_desc(&str_cmd);
         }
 
@@ -1127,7 +1296,12 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
         // updated with choices for the user.
         let _ = {
             // Append all matching directories
-            let expand_flags = self.completion_expand_flags() | ExpandFlags::DIRECTORIES_ONLY;
+            let expand_flags = ExpandFlags {
+                path_filter: Some(PathFilter::Directory {
+                    for_cd_argument: None,
+                }),
+                ..self.completion_expand_flags()
+            };
             expand_to_receiver(
                 str_cmd.clone(),
                 &mut self.completions,
@@ -1149,8 +1323,8 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
                 &str_cmd,
                 &{ Box::new(complete_function_desc) as DescriptionFunc },
                 &possible_comp,
-                CompleteFlags::empty(),
-                ExpandFlags::empty(),
+                CompleteFlags::default(),
+                /* allow_nonliteral_leading_dot=*/ false,
             );
 
             // Append all matching builtins
@@ -1163,8 +1337,8 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
                 &str_cmd,
                 &{ Box::new(|name| builtin_get_desc(name).unwrap_or(L!("")).to_owned()) },
                 &possible_comp,
-                CompleteFlags::empty(),
-                ExpandFlags::empty(),
+                CompleteFlags::default(),
+                /* allow_nonliteral_leading_dot=*/ false,
             );
         }
     }
@@ -1179,7 +1353,12 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
             for abbr in set.list() {
                 if !abbr.is_regex() {
                     possible_comp.push(Completion::from_completion(abbr.key.clone()));
-                    descs.insert(abbr.key.clone(), abbr.replacement.clone());
+                    if let Some(description) = &abbr.description {
+                        let desc = sprintf!("%s # %s", abbr.replacement, description);
+                        descs.insert(abbr.key.clone(), desc);
+                    } else {
+                        descs.insert(abbr.key.clone(), abbr.replacement.clone());
+                    }
                 }
             }
         });
@@ -1193,7 +1372,7 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
             &{ Box::new(desc_func) as _ },
             &possible_comp,
             CompleteFlags::NO_SPACE,
-            ExpandFlags::empty(),
+            /* allow_nonliteral_leading_dot=*/ false,
         );
     }
 
@@ -1208,7 +1387,7 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
     /// - `desc`: Description of the completion
     /// - `flags`: The flags
     fn complete_from_args(&mut self, s: &wstr, args: &wstr, desc: &wstr, flags: CompleteFlags) {
-        let is_autosuggest = self.flags.autosuggestion;
+        let is_autosuggest = self.flags.autosuggestion();
 
         let mut saved_statuses = None;
         let mut scope = None;
@@ -1220,7 +1399,7 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
         let eflags = if is_autosuggest {
             ExpandFlags::FAIL_ON_CMDSUBST
         } else {
-            ExpandFlags::empty()
+            ExpandFlags::default()
         };
 
         let possible_comp = Parser::expand_argument_list(args, eflags, self.ctx);
@@ -1236,15 +1415,278 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
             &const_desc(desc),
             &possible_comp,
             flags,
-            ExpandFlags::ALLOW_NONLITERAL_LEADING_DOT,
+            /* allow_nonliteral_leading_dot=*/ true,
         );
     }
 
-    /// complete_param: Given a command, find completions for the argument `s` of command `cmd_orig`
-    /// with previous option `popt`. If file completions should be disabled, then mark
-    /// `out_do_file` as `false`.
+    // Return whether a command (which may be a command name or a full path)
+    // matches a completion entry key.
+    fn command_matches(cmd: &wstr, key: &CompletionEntryKey) -> bool {
+        if wildcard_match(cmd, &key.name, false) {
+            return true;
+        }
+        // On cygwin, if we didn't have a completion for "foo.exe",
+        // check if there is one for "foo".
+        !key.is_path
+            && strip_executable_suffix(cmd)
+                .is_some_and(|stripped| wildcard_match(stripped, &key.name, false))
+    }
+
+    /// Return the available completion entry options for a given command.
+    /// The command is given both as the CmdString (i.e. including path) and the name.
+    fn complete_entry_options_for_command(
+        cmd_string: &CmdString,
+        cmd_name: &wstr,
+    ) -> Vec<Arc<CompletionEntry>> {
+        COMPLETION_MAP
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|(key, completion)| {
+                let cmd = if key.is_path {
+                    &cmd_string.path
+                } else {
+                    cmd_name
+                };
+                if Self::command_matches(cmd, key) {
+                    Some(Arc::clone(completion))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Given a command, find completions in `options` for the argument `s` of command `cmd_orig`
+    /// with previous option `popt`.
     ///
-    /// Returns `true` if successful, `false` if there's an error.
+    /// Returns this command's file completion policy, or an error on completion overflow.
+    fn complete_param_for_command_from_options(
+        &mut self,
+        s: &wstr,
+        popt: &wstr,
+        options: &CompletionEntry,
+        use_switches: bool,
+    ) -> Result<FileCompletionPolicy, CompletionOverflow> {
+        let mut file_policy = FileCompletionPolicy::Inherit;
+
+        let short_opt_pos = self.short_option_pos(s, options);
+        // We want last_option_requires_param to default to false but distinguish between when
+        // a previous completion has set it to false and when it has its default value.
+        let mut last_option_requires_param = None;
+
+        if use_switches {
+            // Whether this token has been claimed as the argument to a specific switch.
+            let mut token_claimed = false;
+            if s.char_at(0) == '-' {
+                // Check if we are entering a combined option and argument (like --color=auto or
+                // -I/usr/include).
+                for o in options {
+                    let arg_offset = if o.typ == CompleteOptionType::Short {
+                        let Some(short_opt_pos) = short_opt_pos else {
+                            continue;
+                        };
+                        if o.option.char_at(0) != s.char_at(short_opt_pos) {
+                            continue;
+                        }
+                        Some(short_opt_pos + 1)
+                    } else {
+                        param_match2(o, s)
+                    };
+
+                    if self.conditions_test(&o.conditions) {
+                        if o.typ == CompleteOptionType::Short {
+                            // Only override a true last_option_requires_param value with a false
+                            // one
+                            *last_option_requires_param
+                                .get_or_insert(o.argument_policy.requires_param) &=
+                                o.argument_policy.requires_param;
+                        }
+                        if let Some(arg_offset) = arg_offset {
+                            if o.argument_policy.requires_param {
+                                token_claimed = true;
+                            }
+                            file_policy = file_policy.max(o.argument_policy.files);
+                            let (arg_prefix, arg) = s.split_once(arg_offset);
+                            let first_new = self.completions.len();
+                            self.complete_from_args(arg, &o.comp, o.desc.localize(), o.flags);
+                            for compl in &mut self.completions[first_new..] {
+                                compl.prepend_token_prefix(arg_prefix);
+                            }
+                        }
+                    }
+                }
+            } else if popt.char_at(0) == '-' {
+                // Set to true if we found a matching old-style switch.
+                // Here we are testing the previous argument,
+                // to see how we should complete the current argument
+                let mut old_style_match = false;
+
+                // If we are using old style long options, check for them first.
+                for o in options {
+                    if o.typ == CompleteOptionType::SingleLong
+                        && param_match(o, popt)
+                        && self.conditions_test(&o.conditions)
+                    {
+                        old_style_match = true;
+                        if o.argument_policy.requires_param {
+                            token_claimed = true;
+                        }
+                        file_policy = file_policy.max(o.argument_policy.files);
+                        self.complete_from_args(s, &o.comp, o.desc.localize(), o.flags);
+                    }
+                }
+
+                // No old style option matched, or we are not using old style options. We check if
+                // any short (or gnu style) options do.
+                if !old_style_match {
+                    let prev_short_opt_pos = self.short_option_pos(popt, options);
+                    for o in options {
+                        // Gnu-style options with _optional_ arguments must be specified as a single
+                        // token, so that it can be differed from a regular argument.
+                        // Here we are testing the previous argument for a GNU-style match,
+                        // to see how we should complete the current argument
+                        if !o.argument_policy.requires_param {
+                            continue;
+                        }
+
+                        let mut r#match = false;
+                        if o.typ == CompleteOptionType::Short {
+                            if let Some(prev_short_opt_pos) = prev_short_opt_pos {
+                                r#match = prev_short_opt_pos + 1 == popt.len()
+                                    && o.option.char_at(0) == popt.char_at(prev_short_opt_pos);
+                            }
+                        } else if o.typ == CompleteOptionType::DoubleLong {
+                            r#match = param_match(o, popt);
+                        }
+                        if r#match && self.conditions_test(&o.conditions) {
+                            if o.argument_policy.requires_param {
+                                token_claimed = true;
+                            }
+                            file_policy = file_policy.max(o.argument_policy.files);
+                            self.complete_from_args(s, &o.comp, o.desc.localize(), o.flags);
+                        }
+                    }
+                }
+            }
+
+            if token_claimed {
+                return Ok(file_policy);
+            }
+        }
+
+        // Try completing both options and positional arguments.
+        // Set a default value for last_option_requires_param only if one hasn't been set
+        let last_option_requires_param = last_option_requires_param.unwrap_or(false);
+
+        // Now we try to complete an option itself
+        for o in options {
+            // If this entry is for the base command, check if any of the arguments match.
+            if !self.conditions_test(&o.conditions) {
+                continue;
+            }
+            if o.option.is_empty() {
+                file_policy = file_policy.max(o.argument_policy.files);
+                self.complete_from_args(s, &o.comp, o.desc.localize(), o.flags);
+            }
+
+            if !use_switches || s.is_empty() {
+                continue;
+            }
+
+            // Check if the short style option matches.
+            if o.typ == CompleteOptionType::Short {
+                let optchar = o.option.char_at(0);
+                if let Some(short_opt_pos) = short_opt_pos {
+                    // Only complete when the last short option has no parameter yet..
+                    if short_opt_pos + 1 != s.len() {
+                        continue;
+                    }
+                    // .. and it does not require one ..
+                    if last_option_requires_param {
+                        continue;
+                    }
+                    // .. and the option is not already there.
+                    if s.contains(optchar) {
+                        continue;
+                    }
+                } else {
+                    // str has no short option at all (but perhaps it is the
+                    // prefix of a single long option).
+                    // Only complete short options if there is no character after the dash.
+
+                    if s != L!("-") {
+                        continue;
+                    }
+                }
+                // It's a match.
+                let desc = o.desc.localize();
+                // Append a short-style option
+                self.completions
+                    .add(Completion::with_desc(o.option.clone(), desc.to_owned()))?;
+            }
+
+            // Check if the long style option matches.
+            if o.typ != CompleteOptionType::SingleLong && o.typ != CompleteOptionType::DoubleLong {
+                continue;
+            }
+
+            let whole_opt = L!("-").repeat(o.expected_dash_count()) + o.option.as_utfstr();
+            if whole_opt.len() < s.len() {
+                continue;
+            }
+            if !s.starts_with("-") {
+                continue;
+            }
+            let anchor_start = !self.flags.fuzzy_match();
+            let Some(r#match) = string_fuzzy_match_string(s, &whole_opt, anchor_start) else {
+                continue;
+            };
+
+            let offset = if r#match.requires_full_replacement() {
+                0
+            } else {
+                s.len()
+            };
+            let completion = whole_opt.slice_from(offset);
+
+            // does this switch have any known arguments
+            let has_arg = !o.comp.is_empty();
+            // does this switch _require_ an argument
+            let req_arg = o.argument_policy.requires_param;
+
+            if o.typ == CompleteOptionType::DoubleLong && (has_arg && !req_arg) {
+                // Optional arguments to a switch can only be handled using the '=', so we add it as
+                // a completion. By default we avoid using '=' and instead rely on '--switch
+                // switch-arg', since it is more commonly supported by homebrew getopt-like
+                // functions.
+                let completion = sprintf!("%s=", completion);
+
+                // Append a long-style option with a mandatory trailing equal sign
+                self.completions.add(Completion::new(
+                    completion,
+                    o.desc.localize().to_owned(),
+                    r#match,
+                    CompleteFlags::NO_SPACE,
+                ))?;
+            }
+
+            // Append a long-style option
+            self.completions.add(Completion::new(
+                completion.to_owned(),
+                o.desc.localize().to_owned(),
+                r#match,
+                CompleteFlags::default(),
+            ))?;
+        }
+        Ok(file_policy)
+    }
+
+    /// complete_param: Given a command, find completions for the argument `s` of command `cmd_orig`
+    /// with previous option `popt`.
+    ///
+    /// Returns this command's file completion policy.
+    /// On completion overflow this returns an error.
     ///
     /// Examples in format (cmd, popt, str):
     ///
@@ -1258,10 +1700,8 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
         popt: &wstr,
         s: &wstr,
         use_switches: bool,
-        out_do_file: &mut bool,
-    ) -> bool {
-        let mut use_files = true;
-        let mut has_force = false;
+    ) -> Result<FileCompletionPolicy, CompletionOverflow> {
+        let mut file_policy = FileCompletionPolicy::Inherit;
 
         let cmd_string = CmdString::new(cmd_orig, self.ctx.vars());
         let cmd_name = cmd_string.basename(cmd_orig);
@@ -1288,282 +1728,18 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
         }
 
         // Make a list of lists of all options that we care about.
-        let all_options: Vec<Vec<CompleteEntryOpt>> = COMPLETION_MAP
-            .lock()
-            .unwrap()
-            .iter()
-            .filter_map(|(idx, completion)| {
-                let r#match = if idx.is_path {
-                    &cmd_string.path
-                } else {
-                    cmd_name
-                };
-                let has_match = wildcard_match(r#match, &idx.name, false)
-                    || (
-                        // On cygwin, if we didn't have a completion for "foo.exe",
-                        // check if there is one for "foo"
-                        !idx.is_path
-                            && strip_executable_suffix(r#match)
-                                .is_some_and(|stripped| wildcard_match(stripped, &idx.name, false))
-                    );
-                if has_match {
-                    // Copy all of their options into our list. Oof, this is a lot of copying.
-                    let mut options = completion.get_options().to_vec();
-                    // We have to copy them in reverse order to preserve legacy behavior (#9221).
-                    options.reverse();
-                    Some(options)
-                } else {
-                    None
-                }
-            })
-            .collect();
+        let all_options: Vec<Arc<CompletionEntry>> =
+            Self::complete_entry_options_for_command(&cmd_string, cmd_name);
 
         // Now release the lock and test each option that we captured above. We have to do this outside
         // the lock because callouts (like the condition) may add or remove completions. See issue #2.
         for options in all_options {
-            let short_opt_pos = self.short_option_pos(s, &options);
-            // We want last_option_requires_param to default to false but distinguish between when
-            // a previous completion has set it to false and when it has its default value.
-            let mut last_option_requires_param = None;
-            let mut use_common = true;
-            if use_switches {
-                if s.char_at(0) == '-' {
-                    // Check if we are entering a combined option and argument (like --color=auto or
-                    // -I/usr/include).
-                    for o in &options {
-                        let arg_offset = if o.typ == CompleteOptionType::Short {
-                            let Some(short_opt_pos) = short_opt_pos else {
-                                continue;
-                            };
-                            if o.option.char_at(0) != s.char_at(short_opt_pos) {
-                                continue;
-                            }
-                            Some(short_opt_pos + 1)
-                        } else {
-                            param_match2(o, s)
-                        };
-
-                        if self.conditions_test(&o.conditions) {
-                            if o.typ == CompleteOptionType::Short {
-                                // Only override a true last_option_requires_param value with a false
-                                // one
-                                *last_option_requires_param
-                                    .get_or_insert(o.result_mode.requires_param) &=
-                                    o.result_mode.requires_param;
-                            }
-                            if let Some(arg_offset) = arg_offset {
-                                if o.result_mode.requires_param {
-                                    use_common = false;
-                                }
-                                if o.result_mode.no_files {
-                                    use_files = false;
-                                }
-                                if o.result_mode.force_files {
-                                    has_force = true;
-                                }
-                                let (arg_prefix, arg) = s.split_once(arg_offset);
-                                let first_new = self.completions.completions.len();
-                                self.complete_from_args(arg, &o.comp, o.desc.localize(), o.flags);
-                                for compl in &mut self.completions.completions[first_new..] {
-                                    if compl.replaces_token() {
-                                        compl.completion.insert_utfstr(0, arg_prefix);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else if popt.char_at(0) == '-' {
-                    // Set to true if we found a matching old-style switch.
-                    // Here we are testing the previous argument,
-                    // to see how we should complete the current argument
-                    let mut old_style_match = false;
-
-                    // If we are using old style long options, check for them first.
-                    for o in &options {
-                        if o.typ == CompleteOptionType::SingleLong
-                            && param_match(o, popt)
-                            && self.conditions_test(&o.conditions)
-                        {
-                            old_style_match = false;
-                            if o.result_mode.requires_param {
-                                use_common = false;
-                            }
-                            if o.result_mode.no_files {
-                                use_files = false;
-                            }
-                            if o.result_mode.force_files {
-                                has_force = true;
-                            }
-                            self.complete_from_args(s, &o.comp, o.desc.localize(), o.flags);
-                        }
-                    }
-
-                    // No old style option matched, or we are not using old style options. We check if
-                    // any short (or gnu style) options do.
-                    if !old_style_match {
-                        let prev_short_opt_pos = self.short_option_pos(popt, &options);
-                        for o in &options {
-                            // Gnu-style options with _optional_ arguments must be specified as a single
-                            // token, so that it can be differed from a regular argument.
-                            // Here we are testing the previous argument for a GNU-style match,
-                            // to see how we should complete the current argument
-                            if !o.result_mode.requires_param {
-                                continue;
-                            }
-
-                            let mut r#match = false;
-                            if o.typ == CompleteOptionType::Short {
-                                if let Some(prev_short_opt_pos) = prev_short_opt_pos {
-                                    r#match = prev_short_opt_pos + 1 == popt.len()
-                                        && o.option.char_at(0) == popt.char_at(prev_short_opt_pos);
-                                }
-                            } else if o.typ == CompleteOptionType::DoubleLong {
-                                r#match = param_match(o, popt);
-                            }
-                            if r#match && self.conditions_test(&o.conditions) {
-                                if o.result_mode.requires_param {
-                                    use_common = false;
-                                }
-                                if o.result_mode.no_files {
-                                    use_files = false;
-                                }
-                                if o.result_mode.force_files {
-                                    has_force = true;
-                                }
-                                self.complete_from_args(s, &o.comp, o.desc.localize(), o.flags);
-                            }
-                        }
-                    }
-                }
-            }
-
-            if !use_common {
-                continue;
-            }
-
-            // Set a default value for last_option_requires_param only if one hasn't been set
-            let last_option_requires_param = last_option_requires_param.unwrap_or(false);
-
-            // Now we try to complete an option itself
-            for o in &options {
-                // If this entry is for the base command, check if any of the arguments match.
-                if !self.conditions_test(&o.conditions) {
-                    continue;
-                }
-                if o.option.is_empty() {
-                    use_files &= !o.result_mode.no_files;
-                    has_force |= o.result_mode.force_files;
-                    self.complete_from_args(s, &o.comp, o.desc.localize(), o.flags);
-                }
-
-                if !use_switches || s.is_empty() {
-                    continue;
-                }
-
-                // Check if the short style option matches.
-                if o.typ == CompleteOptionType::Short {
-                    let optchar = o.option.char_at(0);
-                    if let Some(short_opt_pos) = short_opt_pos {
-                        // Only complete when the last short option has no parameter yet..
-                        if short_opt_pos + 1 != s.len() {
-                            continue;
-                        }
-                        // .. and it does not require one ..
-                        if last_option_requires_param {
-                            continue;
-                        }
-                        // .. and the option is not already there.
-                        if s.contains(optchar) {
-                            continue;
-                        }
-                    } else {
-                        // str has no short option at all (but perhaps it is the
-                        // prefix of a single long option).
-                        // Only complete short options if there is no character after the dash.
-
-                        if s != L!("-") {
-                            continue;
-                        }
-                    }
-                    // It's a match.
-                    let desc = o.desc.localize();
-                    // Append a short-style option
-                    if !self
-                        .completions
-                        .add(Completion::with_desc(o.option.clone(), desc.to_owned()))
-                    {
-                        return false;
-                    }
-                }
-
-                // Check if the long style option matches.
-                if o.typ != CompleteOptionType::SingleLong
-                    && o.typ != CompleteOptionType::DoubleLong
-                {
-                    continue;
-                }
-
-                let whole_opt = L!("-").repeat(o.expected_dash_count()) + o.option.as_utfstr();
-                if whole_opt.len() < s.len() {
-                    continue;
-                }
-                if !s.starts_with("-") {
-                    continue;
-                }
-                let anchor_start = !self.flags.fuzzy_match;
-                let Some(r#match) = string_fuzzy_match_string(s, &whole_opt, anchor_start) else {
-                    continue;
-                };
-
-                let offset = if r#match.requires_full_replacement() {
-                    0
-                } else {
-                    s.len()
-                };
-                let completion = whole_opt.slice_from(offset);
-
-                // does this switch have any known arguments
-                let has_arg = !o.comp.is_empty();
-                // does this switch _require_ an argument
-                let req_arg = o.result_mode.requires_param;
-
-                if o.typ == CompleteOptionType::DoubleLong && (has_arg && !req_arg) {
-                    // Optional arguments to a switch can only be handled using the '=', so we add it as
-                    // a completion. By default we avoid using '=' and instead rely on '--switch
-                    // switch-arg', since it is more commonly supported by homebrew getopt-like
-                    // functions.
-                    let completion = sprintf!("%s=", completion);
-
-                    // Append a long-style option with a mandatory trailing equal sign
-                    if !self.completions.add(Completion::new(
-                        completion,
-                        o.desc.localize().to_owned(),
-                        r#match,
-                        CompleteFlags::NO_SPACE,
-                    )) {
-                        return false;
-                    }
-                }
-
-                // Append a long-style option
-                if !self.completions.add(Completion::new(
-                    completion.to_owned(),
-                    o.desc.localize().to_owned(),
-                    r#match,
-                    CompleteFlags::empty(),
-                )) {
-                    return false;
-                }
-            }
+            let fp =
+                self.complete_param_for_command_from_options(s, popt, &options, use_switches)?;
+            file_policy = file_policy.max(fp);
         }
 
-        if has_force {
-            *out_do_file = true;
-        } else if !use_files {
-            *out_do_file = false;
-        }
-
-        true
+        Ok(file_policy)
     }
 
     /// Perform generic (not command-specific) expansions on the specified string.
@@ -1579,23 +1755,24 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
         }
         let mut flags = self.completion_expand_flags();
         if !do_file {
-            flags |= ExpandFlags::SKIP_WILDCARDS;
+            flags.skip_wildcards = true;
         }
         if is_unterminated_brace {
-            flags |= ExpandFlags::NO_SPACE_FOR_UNCLOSED_BRACE;
+            flags.no_space_for_unclosed_brace = true;
         }
 
         if handle_as_special_cd && do_file {
-            if self.flags.autosuggestion {
-                flags |= ExpandFlags::SPECIAL_FOR_CD_AUTOSUGGESTION;
-            }
-            flags |= ExpandFlags::DIRECTORIES_ONLY;
-            flags |= ExpandFlags::SPECIAL_FOR_CD;
+            flags.path_filter = Some(PathFilter::Directory {
+                for_cd_argument: Some(ForCdArgument {
+                    for_autosuggestion: self.flags.autosuggestion(),
+                }),
+            });
         }
 
+        assert!(!self.flags.autosuggestion() || !flags.gen_descriptions);
         // Squelch file descriptions per issue #254.
-        if self.flags.autosuggestion || do_file {
-            flags -= ExpandFlags::GEN_DESCRIPTIONS;
+        if do_file {
+            flags.gen_descriptions = false;
         }
 
         // Expand words separated by '=' separately, unless '=' is escaped or quoted.
@@ -1606,7 +1783,7 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
         // foo=bar => expand the whole thing, and also just bar
         //
         // We also support colon separator (#2178). If there's more than one, prefer the last one.
-        let sep_index = if get_quote(s, s.len()).is_some() {
+        let sep_index = if get_quote(s).is_some() {
             None
         } else {
             let mut end = s.len();
@@ -1630,14 +1807,12 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
             // Don't do fuzzy matching for files if the string begins with a dash (issue #568). We could
             // consider relaxing this if there was a preceding double-dash argument.
             if string_prefixes_string(L!("-"), s) {
-                flags -= ExpandFlags::FUZZY_MATCH;
+                flags.fuzzy_match = false;
             }
 
-            if matches!(
-                expand_to_receiver(s.to_owned(), &mut self.completions, flags, self.ctx, None)
-                    .result,
-                ExpandResultCode::Error | ExpandResultCode::Overflow,
-            ) {
+            if expand_to_receiver(s.to_owned(), &mut self.completions, flags, self.ctx, None)
+                .failed()
+            {
                 flogf!(complete, "Error while expanding string '%s'", s);
             }
             Self::escape_opening_brackets(&mut self.completions[first_from_start..], s);
@@ -1649,17 +1824,15 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
 
         let sep_string = s.slice_from(sep_index + 1);
         let mut local_completions = Vec::new();
-        if matches!(
-            expand_string(
-                sep_string.to_owned(),
-                &mut local_completions,
-                flags,
-                self.ctx,
-                None,
-            )
-            .result,
-            ExpandResultCode::Error | ExpandResultCode::Overflow
-        ) {
+        if expand_string(
+            sep_string.to_owned(),
+            &mut local_completions,
+            flags,
+            self.ctx,
+            None,
+        )
+        .failed()
+        {
             flogf!(complete, "Error while expanding string '%s'", sep_string);
         }
 
@@ -1682,23 +1855,28 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
         let varlen = s.len() - start_offset;
         let mut res = false;
 
-        for env_name in self.ctx.vars().get_names(EnvMode::empty()) {
-            let anchor_start = !self.flags.fuzzy_match;
+        for env_name in self.ctx.vars().get_names(EnvMode::default()) {
+            let anchor_start = !self.flags.fuzzy_match();
             let Some(r#match) = string_fuzzy_match_string(var, &env_name, anchor_start) else {
                 continue;
             };
 
-            let mut flags = CompleteFlags::VARIABLE_NAME;
+            let mut flags = CompleteFlags {
+                wants_suffix: WantsSuffix::Yes(SuffixType {
+                    for_variable_name: true,
+                }),
+                ..Default::default()
+            };
             let comp = if !r#match.requires_full_replacement() {
                 // Take only the suffix.
                 env_name.slice_from(varlen).to_owned()
             } else {
-                flags |= CompleteFlags::DONT_ESCAPE;
+                flags.wants_escaping = WantsEscaping::No;
                 whole_var.slice_to(start_offset).to_owned() + env_name.as_utfstr()
             };
 
             let mut desc = WString::new();
-            if self.flags.descriptions && !self.flags.autosuggestion {
+            if self.flags.descriptions() {
                 // $history can be huge, don't put all of it in the completion description; see
                 // #6288.
                 if env_name == "history" {
@@ -1735,7 +1913,7 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
     }
 
     fn try_complete_variable(&mut self, s: &wstr) -> bool {
-        #[derive(PartialEq, Eq)]
+        #[derive(PartialEq)]
         enum Mode {
             Unquoted,
             SingleQuoted,
@@ -1785,7 +1963,7 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
 
         // Now complete if we have a variable start. Note the variable text may be empty; in that case
         // don't generate an autosuggestion, but do allow tab completion.
-        let allow_empty = !self.flags.autosuggestion;
+        let allow_empty = !self.flags.autosuggestion();
         let text_is_empty = variable_start == Some(s.len() - 1);
         if let Some(variable_start) = variable_start {
             if allow_empty || !text_is_empty {
@@ -1852,7 +2030,7 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
                     // TODO: propagate overflow?
                     let mut flags = CompleteFlags::NO_SPACE;
                     if r#match.requires_full_replacement() {
-                        flags |= CompleteFlags::DONT_ESCAPE;
+                        flags.wants_escaping = WantsEscaping::No;
                     }
                     let _ = self.completions.add(Completion::new(
                         if r#match.requires_full_replacement() {
@@ -1922,7 +2100,7 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
             };
             let set_result = self.ctx.parser().set_var(
                 variable_name,
-                ParserEnvSetMode::new(EnvMode::LOCAL | EnvMode::EXPORT),
+                ParserEnvSetMode::new(EnvMode::LOCAL_EXPORTED),
                 vals,
             );
             if set_result != EnvStackSetResult::Ok {
@@ -1943,7 +2121,7 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
             return;
         }
 
-        let is_autosuggest = self.flags.autosuggestion;
+        let is_autosuggest = self.flags.autosuggestion();
         // Perhaps set a transient commandline so that custom completions
         // builtin_commandline will refer to the wrapped command. But not if
         // we're doing autosuggestions.
@@ -1959,13 +2137,19 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
         let block = self.apply_var_assignments(ad.var_assignments);
         if !self.ctx.check_cancel() {
             // Invoke any custom completions for this command.
-            self.complete_param_for_command(
-                cmd,
-                &ad.previous_argument,
-                &ad.current_argument,
-                !ad.had_ddash,
-                &mut ad.do_file,
-            );
+            // Ignore overflow errors.
+            let file_policy = self
+                .complete_param_for_command(
+                    cmd,
+                    &ad.previous_argument,
+                    &ad.current_argument,
+                    !ad.had_ddash,
+                )
+                .unwrap_or_default();
+            // Across the wrap chain, the topmost command with an opinion wins.
+            if ad.file_policy == FileCompletionPolicy::Inherit {
+                ad.file_policy = file_policy;
+            }
         }
         if let Some(block) = block {
             self.ctx.parser().pop_block(block);
@@ -2016,7 +2200,7 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
             // Separate the wrap target into any variable assignments VAR=... and the command itself.
             let mut wrapped_command = None;
             let mut wrapped_command_offset_in_wt = None;
-            let tokenizer = Tokenizer::new(&wt, TokFlags::empty());
+            let tokenizer = Tokenizer::new(&wt, TokFlags::default());
             for tok in tokenizer {
                 let mut tok_src = tok.get_source(&wt).to_owned();
                 if variable_assignment_equals_pos(&tok_src).is_some() {
@@ -2095,22 +2279,25 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
         // unescaped version.
         let Some(unescaped_argument) = unescape_string(
             argument,
-            UnescapeStringStyle::Script(UnescapeFlags::INCOMPLETE),
+            UnescapeStringStyle::Script(UnescapeFlags {
+                incomplete: true,
+                ..Default::default()
+            }),
         ) else {
             return;
         };
         for comp in completions {
-            if comp.replaces_token() {
+            if !comp.set_replaces_token() {
                 continue;
             }
-            comp.flags |= CompleteFlags::REPLACES_TOKEN;
-            comp.flags |= CompleteFlags::DONT_ESCAPE_TILDES; // See #9073.
 
             // We are grafting a completion that is expected to be escaped later. This will break
             // if the original completion doesn't want escaping.  Happily, this is only the case
             // for username completion and variable name completion. They shouldn't end up here
             // anyway because they won't contain '['.
-            if comp.flags.contains(CompleteFlags::DONT_ESCAPE) {
+            if comp.flags.wants_escaping() {
+                comp.flags.dont_escape_tildes(); // See #9073.
+            } else {
                 flog!(warning, "unexpected completion flag");
             }
             comp.completion.insert_utfstr(0, &unescaped_argument);
@@ -2139,7 +2326,7 @@ impl<'ctx, 'parser> Completer<'ctx, 'parser> {
                 comp_str.insert_utfstr(0, prefix);
             }
             if arg_strs.binary_search(&comp_str).is_ok() {
-                comp.flags |= CompleteFlags::DUPLICATES_ARGUMENT;
+                comp.flags.duplicates_argument = true;
             }
         }
     }
@@ -2237,12 +2424,7 @@ fn expand_command_token(ctx: &mut OperationContext<'_>, cmd_tok: &mut WString) -
     // TODO: we give up if the first token expands to more than one argument. We could handle
     // that case by propagating arguments.
     // Also we could expand wildcards.
-    expand_one(
-        cmd_tok,
-        ExpandFlags::FAIL_ON_CMDSUBST | ExpandFlags::SKIP_WILDCARDS,
-        ctx,
-        None,
-    )
+    expand_one(cmd_tok, ExpandFlags::NO_IO, ctx, None)
 }
 
 /// Add an unexpanded completion "rule" to generate completions from for a command.
@@ -2267,7 +2449,7 @@ fn expand_command_token(ctx: &mut OperationContext<'_>, cmd_tok: &mut WString) -
 /// - `option`: The name of an option.
 /// - `option_type`: The type of option: can be option_type_short (-x),
 ///   option_type_single_long (-foo), option_type_double_long (--bar).
-/// - `result_mode`: Controls how to search further completions when this completion has been
+/// - `argument_policy`: Controls how to search further completions when this completion has been
 ///   successfully matched.
 /// - `comp`: A space separated list of completions which may contain subshells.
 /// - `desc`: A description of the completion.
@@ -2280,7 +2462,7 @@ pub fn complete_add(
     cmd_is_path: bool,
     option: WString,
     option_type: CompleteOptionType,
-    result_mode: CompletionMode,
+    argument_policy: ArgumentPolicy,
     condition: Vec<WString>,
     comp: WString,
     desc: WString,
@@ -2295,7 +2477,7 @@ pub fn complete_add(
     // Lock the lock that allows us to edit the completion entry list.
     let mut completion_map = COMPLETION_MAP.lock().expect("mutex poisoned");
     let c = completion_map
-        .entry(CompletionEntryIndex {
+        .entry(CompletionEntryKey {
             name: cmd,
             is_path: cmd_is_path,
         })
@@ -2305,28 +2487,28 @@ pub fn complete_add(
     let opt = CompleteEntryOpt {
         option,
         typ: option_type,
-        result_mode,
+        argument_policy,
         comp,
         // The external source is a completion script in `share`,
         // from which `cargo xtask gettext update` extracts descriptions.
         desc: LocalizableString::from_external_source(desc),
-        conditions: condition,
+        conditions: condition.into_boxed_slice(),
         flags,
     };
-    c.add_option(opt);
+    Arc::make_mut(c).add_option(opt);
 }
 
 /// Remove a previously defined completion.
 pub fn complete_remove(cmd: WString, cmd_is_path: bool, option: &wstr, typ: CompleteOptionType) {
     let mut completion_map = COMPLETION_MAP.lock().expect("mutex poisoned");
-    let idx = CompletionEntryIndex {
+    let key = CompletionEntryKey {
         name: cmd,
         is_path: cmd_is_path,
     };
-    if let Some(c) = completion_map.get_mut(&idx) {
-        let delete_it = c.remove_option(option, typ);
+    if let Some(c) = completion_map.get_mut(&key) {
+        let delete_it = Arc::make_mut(c).remove_option(option, typ);
         if delete_it {
-            completion_map.remove(&idx);
+            completion_map.remove(&key);
         }
     }
 }
@@ -2334,14 +2516,14 @@ pub fn complete_remove(cmd: WString, cmd_is_path: bool, option: &wstr, typ: Comp
 /// Removes all completions for a given command.
 pub fn complete_remove_all(cmd: WString, cmd_is_path: bool, explicit: bool) {
     let mut completion_map = COMPLETION_MAP.lock().expect("mutex poisoned");
-    let idx = CompletionEntryIndex {
+    let key = CompletionEntryKey {
         name: cmd,
         is_path: cmd_is_path,
     };
-    let removed = completion_map.remove(&idx).is_some();
-    WRAPPER_MAP.lock().unwrap().remove(&idx.name);
-    if explicit && !removed && !idx.is_path {
-        COMPLETION_TOMBSTONES.lock().unwrap().insert(idx.name);
+    let removed = completion_map.remove(&key).is_some();
+    WRAPPER_MAP.lock().unwrap().remove(&key.name);
+    if explicit && !removed && !key.is_path {
+        COMPLETION_TOMBSTONES.lock().unwrap().insert(key.name);
     }
 }
 
@@ -2388,28 +2570,32 @@ fn append_switch_long(out: &mut WString, opt: &wstr) {
     sprintf!(=> out, " --%s", opt);
 }
 
-fn completion2string(index: &CompletionEntryIndex, o: &CompleteEntryOpt) -> WString {
+fn completion2string(key: &CompletionEntryKey, o: &CompleteEntryOpt) -> WString {
     let mut out = WString::from(L!("complete"));
 
-    if o.flags.contains(CompleteFlags::DONT_SORT) {
+    if o.flags.dont_sort {
         append_switch_short(&mut out, 'k');
     }
 
-    if o.result_mode.no_files && o.result_mode.requires_param {
+    let ArgumentPolicy {
+        files,
+        requires_param,
+    } = o.argument_policy;
+    if files == FileCompletionPolicy::Skip && requires_param {
         append_switch_long(&mut out, L!("exclusive"));
-    } else if o.result_mode.no_files {
+    } else if files == FileCompletionPolicy::Skip {
         append_switch_long(&mut out, L!("no-files"));
-    } else if o.result_mode.force_files {
+    } else if files == FileCompletionPolicy::Force {
         append_switch_long(&mut out, L!("force-files"));
-    } else if o.result_mode.requires_param {
+    } else if requires_param {
         append_switch_long(&mut out, L!("require-parameter"));
     }
 
-    if index.is_path {
-        append_switch_short_arg(&mut out, 'p', &index.name);
+    if key.is_path {
+        append_switch_short_arg(&mut out, 'p', &key.name);
     } else {
         out.push(' ');
-        out.push_utfstr(&escape(&index.name));
+        out.push_utfstr(&escape(&key.name));
     }
 
     match o.typ {
@@ -2602,26 +2788,16 @@ pub fn complete_get_wrap_targets(command: &wstr) -> Vec<WString> {
     wrappers.get(command).cloned().unwrap_or_default()
 }
 
-#[derive(Clone, Copy, Default)]
-pub struct CompletionRequestOptions {
-    /// Requesting autosuggestion
-    pub autosuggestion: bool,
-    /// Make descriptions
-    pub descriptions: bool,
-    /// If set, we do not require a prefix match
-    pub fuzzy_match: bool,
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        CompleteFlags, CompleteOptionType, CompletionMode, CompletionRequestOptions, complete,
-        complete_add, complete_add_wrapper, complete_get_wrap_targets, complete_remove_wrapper,
-        sort_and_prioritize,
+        ArgumentPolicy, CompleteFlags, CompleteOptionType, CompletionRequestOptions,
+        FileCompletionPolicy, complete, complete_add, complete_add_wrapper,
+        complete_get_wrap_targets, complete_remove_wrapper, sort_and_prioritize,
     };
     use crate::{
         abbrs::{self, Abbreviation, with_abbrs_mut},
-        complete::Completion,
+        complete::{Completion, ReplacementScope, WantsSuffix},
         env::{EnvMode, EnvSetMode, Environment as _},
         io::IoChain,
         operation_context::{
@@ -2676,8 +2852,10 @@ mod tests {
                            flags: CompletionRequestOptions|
          -> Vec<Completion> { complete(cmd, flags, ctx).0 };
 
-        let mut completions = do_complete(ctx, L!("$"), CompletionRequestOptions::default());
-        sort_and_prioritize(&mut completions, CompletionRequestOptions::default());
+        let plain = CompletionRequestOptions::default();
+        let autosuggest = CompletionRequestOptions::Autosuggestion;
+        let mut completions = do_complete(ctx, L!("$"), plain);
+        sort_and_prioritize(&mut completions, plain);
         assert_eq!(
             completions
                 .into_iter()
@@ -2693,30 +2871,26 @@ mod tests {
         );
 
         // Smartcase test. Lowercase inputs match both lowercase and uppercase.
-        let mut completions = do_complete(ctx, L!("$a"), CompletionRequestOptions::default());
-        sort_and_prioritize(&mut completions, CompletionRequestOptions::default());
+        let mut completions = do_complete(ctx, L!("$a"), plain);
+        sort_and_prioritize(&mut completions, plain);
 
         assert_eq!(completions.len(), 2);
         assert_eq!(completions[0].completion, L!("$ALPHA!"));
         assert_eq!(completions[1].completion, L!("lpha"));
 
-        let mut completions = do_complete(ctx, L!("$F"), CompletionRequestOptions::default());
-        sort_and_prioritize(&mut completions, CompletionRequestOptions::default());
+        let mut completions = do_complete(ctx, L!("$F"), plain);
+        sort_and_prioritize(&mut completions, plain);
         assert_eq!(completions.len(), 3);
         assert_eq!(completions[0].completion, L!("oo1"));
         assert_eq!(completions[1].completion, L!("oo2"));
         assert_eq!(completions[2].completion, L!("oo3"));
 
-        completions = do_complete(ctx, L!("$1"), CompletionRequestOptions::default());
-        sort_and_prioritize(&mut completions, CompletionRequestOptions::default());
+        completions = do_complete(ctx, L!("$1"), autosuggest);
+        sort_and_prioritize(&mut completions, autosuggest);
         assert_eq!(completions, vec![]);
 
-        let fuzzy_options = CompletionRequestOptions {
-            fuzzy_match: true,
-            ..Default::default()
-        };
-        let mut completions = do_complete(ctx, L!("$1"), fuzzy_options);
-        sort_and_prioritize(&mut completions, fuzzy_options);
+        let mut completions = do_complete(ctx, L!("$1"), plain);
+        sort_and_prioritize(&mut completions, plain);
         assert_eq!(completions.len(), 3);
         assert_eq!(completions[0].completion, L!("$Bar1"));
         assert_eq!(completions[1].completion, L!("$Foo1"));
@@ -2744,36 +2918,24 @@ mod tests {
         std::fs::create_dir_all("test/complete_test/foo2").unwrap();
         std::fs::create_dir_all("test/complete_test/foo3").unwrap();
 
-        completions = do_complete(
-            ctx,
-            L!("echo (test/complete_test/testfil"),
-            CompletionRequestOptions::default(),
-        );
+        completions = do_complete(ctx, L!("echo (test/complete_test/testfil"), plain);
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].completion, L!("e"));
 
-        completions = do_complete(
-            ctx,
-            L!("echo (ls test/complete_test/testfil"),
-            CompletionRequestOptions::default(),
-        );
+        completions = do_complete(ctx, L!("echo (ls test/complete_test/testfil"), plain);
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].completion, L!("e"));
 
         completions = do_complete(
             ctx,
             L!("echo (command ls test/complete_test/testfil"),
-            CompletionRequestOptions::default(),
+            plain,
         );
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].completion, L!("e"));
 
         // Completing after spaces - see #2447
-        completions = do_complete(
-            ctx,
-            L!("echo (ls test/complete_test/has\\ "),
-            CompletionRequestOptions::default(),
-        );
+        completions = do_complete(ctx, L!("echo (ls test/complete_test/has\\ "), plain);
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].completion, L!("space"));
 
@@ -2817,21 +2979,21 @@ mod tests {
                 .pushd(pushed_dirs, "test/complete_test/cwd-for-colon");
             whole_token_completion_dominates!(
                 ": ../colon:",
-                CompletionRequestOptions::default(),
+                plain,
                 "TTestWithColon",
                 "test-file-in-cwd",
             );
             // Even when it has a case mismatch.
             whole_token_completion_dominates!(
                 ": ../colon:t",
-                CompletionRequestOptions::default(),
+                plain,
                 "../colon:TTestWithColon",
                 "est-file-in-cwd",
             );
             // Even when it is not a prefix.
             whole_token_completion_dominates!(
                 ": ../colon:Tes",
-                fuzzy_options,
+                plain,
                 "../colon:TTestWithColon",
                 "../colon:test-file-in-cwd",
             );
@@ -2841,7 +3003,7 @@ mod tests {
         macro_rules! unique_completion_applies_as {
             ( $cmdline:expr, $completion_result:expr, $applied:expr $(,)? ) => {
                 let cmdline = L!($cmdline);
-                let completions = do_complete(ctx, cmdline, CompletionRequestOptions::default());
+                let completions = do_complete(ctx, cmdline, autosuggest);
                 assert_eq!(completions.len(), 1);
                 assert_eq!(
                     completions[0].completion,
@@ -2927,7 +3089,10 @@ mod tests {
         let newcmdline = completion_apply_to_command_line(
             ctx,
             L!("Debug/"),
-            CompleteFlags::REPLACES_TOKEN | CompleteFlags::NO_SPACE,
+            CompleteFlags {
+                replaces: Some(ReplacementScope::Token(Default::default())),
+                ..CompleteFlags::NO_SPACE
+            },
             L!("mv debug debug"),
             &mut cursor_pos,
             true,
@@ -2940,41 +3105,25 @@ mod tests {
             .eval(L!("function scuttlebutt; end"), &IoChain::new());
 
         // Complete a function name.
-        completions = do_complete(
-            ctx,
-            L!("echo (scuttlebut"),
-            CompletionRequestOptions::default(),
-        );
+        completions = do_complete(ctx, L!("echo (scuttlebut"), plain);
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].completion, L!("t"));
 
         // But not with the command prefix.
-        completions = do_complete(
-            ctx,
-            L!("echo (command scuttlebut"),
-            CompletionRequestOptions::default(),
-        );
+        completions = do_complete(ctx, L!("echo (command scuttlebut"), plain);
         assert_eq!(&completions, &[]);
 
         // Not with the builtin prefix.
-        let completions = do_complete(
-            ctx,
-            L!("echo (builtin scuttlebut"),
-            CompletionRequestOptions::default(),
-        );
+        let completions = do_complete(ctx, L!("echo (builtin scuttlebut"), plain);
         assert_eq!(&completions, &[]);
 
         // Not after a redirection.
-        let completions = do_complete(
-            ctx,
-            L!("echo hi > scuttlebut"),
-            CompletionRequestOptions::default(),
-        );
+        let completions = do_complete(ctx, L!("echo hi > scuttlebut"), plain);
         assert_eq!(&completions, &[]);
 
         // Trailing spaces (#1261).
-        let no_files = CompletionMode {
-            no_files: true,
+        let no_files = ArgumentPolicy {
+            files: FileCompletionPolicy::Skip,
             ..Default::default()
         };
         complete_add(
@@ -2986,120 +3135,70 @@ mod tests {
             vec![],
             L!("qux").into(),
             WString::new(),
-            CompleteFlags::AUTO_SPACE,
+            CompleteFlags {
+                wants_suffix: WantsSuffix::Auto,
+                ..Default::default()
+            },
         );
-        let completions = do_complete(ctx, L!("foobarbaz "), CompletionRequestOptions::default());
+        let completions = do_complete(ctx, L!("foobarbaz "), plain);
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].completion, L!("qux"));
 
         // Don't complete variable names in single quotes (#1023).
-        let completions = do_complete(ctx, L!("echo '$Foo"), CompletionRequestOptions::default());
+        let completions = do_complete(ctx, L!("echo '$Foo"), plain);
         assert_eq!(completions, vec![]);
-        let completions = do_complete(ctx, L!("echo \\$Foo"), CompletionRequestOptions::default());
+        let completions = do_complete(ctx, L!("echo \\$Foo"), plain);
         assert_eq!(completions, vec![]);
 
         // File completions.
-        let completions = do_complete(
-            ctx,
-            L!("cat test/complete_test/te"),
-            CompletionRequestOptions::default(),
-        );
+        let completions = do_complete(ctx, L!("cat test/complete_test/te"), autosuggest);
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].completion, L!("stfile"));
-        let completions = do_complete(
-            ctx,
-            L!("echo sup > test/complete_test/te"),
-            CompletionRequestOptions::default(),
-        );
+        let completions = do_complete(ctx, L!("echo sup > test/complete_test/te"), autosuggest);
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].completion, L!("stfile"));
-        let completions = do_complete(
-            ctx,
-            L!("echo sup > test/complete_test/te"),
-            CompletionRequestOptions::default(),
-        );
+        let completions = do_complete(ctx, L!("echo sup > test/complete_test/te"), autosuggest);
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].completion, L!("stfile"));
 
         ctx.parser().pushd(pushed_dirs, "test/complete_test");
-        let completions = do_complete(ctx, L!("cat te"), CompletionRequestOptions::default());
+        let completions = do_complete(ctx, L!("cat te"), autosuggest);
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].completion, L!("stfile"));
         assert!(!completions[0].replaces_token());
-        assert!(
-            !(completions[0]
-                .flags
-                .contains(CompleteFlags::DUPLICATES_ARGUMENT))
-        );
-        let completions = do_complete(
-            ctx,
-            L!("cat testfile te"),
-            CompletionRequestOptions::default(),
-        );
+        assert!(!(completions[0].flags.duplicates_argument));
+        let completions = do_complete(ctx, L!("cat testfile te"), autosuggest);
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].completion, L!("stfile"));
-        assert!(
-            completions[0]
-                .flags
-                .contains(CompleteFlags::DUPLICATES_ARGUMENT)
-        );
-        let completions = do_complete(
-            ctx,
-            L!("cat testfile TE"),
-            CompletionRequestOptions::default(),
-        );
+        assert!(completions[0].flags.duplicates_argument);
+        let completions = do_complete(ctx, L!("cat testfile TE"), autosuggest);
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].completion, L!("testfile"));
         assert!(completions[0].replaces_token());
-        assert!(
-            completions[0]
-                .flags
-                .contains(CompleteFlags::DUPLICATES_ARGUMENT)
-        );
-        let completions = do_complete(
-            ctx,
-            L!("something --abc=te"),
-            CompletionRequestOptions::default(),
-        );
+        assert!(completions[0].flags.duplicates_argument);
+        let completions = do_complete(ctx, L!("something --abc=te"), autosuggest);
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].completion, L!("stfile"));
-        let completions = do_complete(
-            ctx,
-            L!("something -abc=te"),
-            CompletionRequestOptions::default(),
-        );
+        let completions = do_complete(ctx, L!("something -abc=te"), autosuggest);
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].completion, L!("stfile"));
-        let completions = do_complete(
-            ctx,
-            L!("something abc=te"),
-            CompletionRequestOptions::default(),
-        );
+        let completions = do_complete(ctx, L!("something abc=te"), autosuggest);
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].completion, L!("stfile"));
-        let completions = do_complete(
-            ctx,
-            L!("something abc=stfile"),
-            CompletionRequestOptions::default(),
-        );
+        let completions = do_complete(ctx, L!("something abc=stfile"), autosuggest);
         assert_eq!(&completions, &[]);
-        let completions = do_complete(ctx, L!("something abc=stfile"), fuzzy_options);
+        let completions = do_complete(ctx, L!("something abc=stfile"), plain);
         assert_eq!(completions.len(), 1);
         assert_eq!(completions[0].completion, L!("abc=testfile"));
 
         // Zero escapes can cause problems. See issue #1631.
-        let completions = do_complete(ctx, L!("cat foo\\0"), CompletionRequestOptions::default());
+        let completions = do_complete(ctx, L!("cat foo\\0"), plain);
         assert_eq!(&completions, &[]);
-        let completions = do_complete(
-            ctx,
-            L!("cat foo\\0bar"),
-            CompletionRequestOptions::default(),
-        );
+        let completions = do_complete(ctx, L!("cat foo\\0bar"), plain);
         assert_eq!(&completions, &[]);
-        let completions = do_complete(ctx, L!("cat \\0"), CompletionRequestOptions::default());
+        let completions = do_complete(ctx, L!("cat \\0"), plain);
         assert_eq!(&completions, &[]);
-        let mut completions =
-            do_complete(ctx, L!("cat te\\0"), CompletionRequestOptions::default());
+        let mut completions = do_complete(ctx, L!("cat te\\0"), plain);
         assert_eq!(&completions, &[]);
 
         ctx.parser().popd(pushed_dirs);
@@ -3120,21 +3219,16 @@ mod tests {
             ));
         });
 
-        let completions = complete(
-            L!("testabbrsonetwothree"),
-            CompletionRequestOptions::default(),
-            ctx,
-        )
-        .0;
+        let completions = complete(L!("testabbrsonetwothree"), plain, ctx).0;
         assert_eq!(completions.len(), 2);
         // Abbreviations should not have a space after them.
         assert_eq!(completions[0].completion, L!("zero"));
-        assert!(completions[0].flags.contains(CompleteFlags::NO_SPACE));
+        assert!(completions[0].flags.suffix_type().is_none());
         with_abbrs_mut(|abbrset| {
             abbrset.erase(L!("testabbrsonetwothreezero"), &[]);
         });
         assert_eq!(completions[1].completion, L!("four"));
-        assert!(!completions[1].flags.contains(CompleteFlags::NO_SPACE));
+        assert!(completions[1].flags.suffix_type().is_some());
 
         // Test wraps.
         assert!(comma_join(complete_get_wrap_targets(L!("wrapper1"))).is_empty());
@@ -3182,16 +3276,14 @@ mod tests {
         complete_add_wrapper(L!("cdwrap1").into(), L!("cd").into());
         complete_add_wrapper(L!("cdwrap2").into(), L!("cdwrap1").into());
 
-        let mut cd_compl = do_complete(ctx, L!("cd "), CompletionRequestOptions::default());
-        sort_and_prioritize(&mut cd_compl, CompletionRequestOptions::default());
+        let mut cd_compl = do_complete(ctx, L!("cd "), plain);
+        sort_and_prioritize(&mut cd_compl, plain);
 
-        let mut cdwrap1_compl =
-            do_complete(ctx, L!("cdwrap1 "), CompletionRequestOptions::default());
-        sort_and_prioritize(&mut cdwrap1_compl, CompletionRequestOptions::default());
+        let mut cdwrap1_compl = do_complete(ctx, L!("cdwrap1 "), plain);
+        sort_and_prioritize(&mut cdwrap1_compl, plain);
 
-        let mut cdwrap2_compl =
-            do_complete(ctx, L!("cdwrap2 "), CompletionRequestOptions::default());
-        sort_and_prioritize(&mut cdwrap2_compl, CompletionRequestOptions::default());
+        let mut cdwrap2_compl = do_complete(ctx, L!("cdwrap2 "), plain);
+        sort_and_prioritize(&mut cdwrap2_compl, plain);
 
         let min_compl_size = cd_compl
             .len()
@@ -3225,7 +3317,7 @@ mod tests {
             ($command:literal, $expected:literal, $vars:expr) => {
                 let mut comps = complete(
                     L!($command),
-                    CompletionRequestOptions::autosuggest(),
+                    CompletionRequestOptions::Autosuggestion,
                     &mut OperationContext::background($vars, EXPANSION_LIMIT_BACKGROUND),
                 )
                 .0;
@@ -3280,7 +3372,7 @@ mod tests {
         // Fake out the home directory
         parser.set_one(
             L!("HOME"),
-            ParserEnvSetMode::new(EnvMode::LOCAL | EnvMode::EXPORT),
+            ParserEnvSetMode::new(EnvMode::LOCAL_EXPORTED),
             L!("test/test-home").to_owned(),
         );
         std::fs::create_dir_all("test/test-home/test_autosuggest_suggest_special/").unwrap();
@@ -3390,10 +3482,9 @@ mod tests {
         perform_one_completion_cd_test!("cd ~absolutelynosuchus", "er/");
         perform_one_completion_cd_test!("cd ~absolutelynosuchuser/", "path1/");
 
-        parser.vars().remove(
-            L!("HOME"),
-            EnvSetMode::new(EnvMode::LOCAL | EnvMode::EXPORT, false),
-        );
+        parser
+            .vars()
+            .remove(L!("HOME"), EnvSetMode::new(EnvMode::LOCAL_EXPORTED, false));
         parser.popd(pushed_dirs);
     }
 
@@ -3406,7 +3497,7 @@ mod tests {
             ($command:literal) => {
                 let comps = complete(
                     L!($command),
-                    CompletionRequestOptions::autosuggest(),
+                    CompletionRequestOptions::Autosuggestion,
                     &mut OperationContext::empty(),
                 )
                 .0;

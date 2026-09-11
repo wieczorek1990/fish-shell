@@ -39,13 +39,13 @@ end
 $fish -c "return 1 2"
 # CHECKERR: return: too many arguments
 # CHECKERR: Standard input (line 1):
-# CHECKERR: return 1 2
-# CHECKERR: ^
+# CHECKERR: {{^}}return 1 2
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help return' for related documentation)
 
 $fish -c "return abc"
 # CHECKERR: return: abc: invalid integer
 # CHECKERR: Standard input (line 1):
-# CHECKERR: return abc
-# CHECKERR: ^
+# CHECKERR: {{^}}return abc
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help return' for related documentation)

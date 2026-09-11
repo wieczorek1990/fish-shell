@@ -8,8 +8,8 @@ begin
     # CHECK: but still going
     # CHECKERR: fish: Unknown command: syntax-error
     # CHECKERR: ~//fish/config.fish (line {{\d+}}):
-    # CHECKERR: syntax-error
-    # CHECKERR: ^~~~~~~~~~~^
+    # CHECKERR: {{^}}    syntax-error
+    # CHECKERR: {{^}}    ^~~~~~~~~~~^
     # CHECKERR: from sourcing file ~//fish/config.fish
     # CHECKERR: called during startup
 

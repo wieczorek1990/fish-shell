@@ -181,8 +181,8 @@ set -l old_path $PWD
 cd nonexistent
 #CHECKERR: cd: The directory 'nonexistent' does not exist
 #CHECKERR: {{.*}}/cd.fish (line {{\d+}}):
-#CHECKERR: builtin cd $argv
-#CHECKERR: ^
+#CHECKERR: {{^}}    builtin cd $argv
+#CHECKERR: {{^}}    ^
 #CHECKERR: in function 'cd' with arguments 'nonexistent'
 #CHECKERR: called on line {{\d+}} of file {{.*}}/cd.fish
 
@@ -190,8 +190,8 @@ touch file
 cd file
 #CHECKERR: cd: 'file' is not a directory
 #CHECKERR: {{.*}}/cd.fish (line {{\d+}}):
-#CHECKERR: builtin cd $argv
-#CHECKERR: ^
+#CHECKERR: {{^}}    builtin cd $argv
+#CHECKERR: {{^}}    ^
 #CHECKERR: in function 'cd' with arguments 'file'
 #CHECKERR: called on line {{\d+}} of file {{.*}}/cd.fish
 
@@ -199,8 +199,8 @@ cd file
 if cygwin_noacl ./
     echo "cd: Permission denied: 'bad-perms'" >&2
     echo "fake/cd.fish (line 123):" >&2
-    echo "builtin cd \$argv" >&2
-    echo "^" >&2
+    echo "    builtin cd \$argv" >&2
+    echo "    ^" >&2
     echo "in function 'cd' with arguments 'bad-perms'" >&2
     echo "called on line 123 of file fake/cd.fish" >&2
 else
@@ -210,8 +210,8 @@ else
 end
 #CHECKERR: cd: Permission denied: 'bad-perms'
 #CHECKERR: {{.*}}/cd.fish (line {{\d+}}):
-#CHECKERR: builtin cd $argv
-#CHECKERR: ^
+#CHECKERR: {{^}}    builtin cd $argv
+#CHECKERR: {{^}}    ^
 #CHECKERR: in function 'cd' with arguments 'bad-perms'
 #CHECKERR: called on line {{\d+}} of file {{.*}}/cd.fish
 
@@ -243,8 +243,8 @@ cd $old_path
 if cygwin_noacl ./
     echo "cd: Permission denied: 'bad-perms'" >&2
     echo "fake/cd.fish (line 123):" >&2
-    echo "builtin cd \$argv" >&2
-    echo "^" >&2
+    echo "    builtin cd \$argv" >&2
+    echo "    ^" >&2
     echo "in function 'cd' with arguments 'bad-perms'" >&2
     echo "called on line 123 of file fake/cd.fish" >&2
 else
@@ -253,8 +253,8 @@ end
 # Permission errors are still a problem!
 #CHECKERR: cd: Permission denied: 'bad-perms'
 #CHECKERR: {{.*}}/cd.fish (line {{\d+}}):
-#CHECKERR: builtin cd $argv
-#CHECKERR: ^
+#CHECKERR: {{^}}    builtin cd $argv
+#CHECKERR: {{^}}    ^
 #CHECKERR: in function 'cd' with arguments 'bad-perms'
 #CHECKERR: called on line {{\d+}} of file {{.*}}/cd.fish
 cd $old_path
@@ -300,8 +300,8 @@ __fish_test_thrash_cd |
 cd ""
 # CHECKERR: cd: Empty directory '' does not exist
 # CHECKERR: {{.*}}/cd.fish (line {{\d+}}):
-# CHECKERR: builtin cd $argv
-# CHECKERR: ^
+# CHECKERR: {{^}}    builtin cd $argv
+# CHECKERR: {{^}}    ^
 # CHECKERR: in function 'cd' with arguments '""'
 # CHECKERR: called on line {{\d+}} of file {{.*}}/cd.fish
 echo $status
@@ -311,8 +311,8 @@ cd (mktemp -d)
 if set -q nosymlinks
     echo "cd: 'fake/broken-symbolic-link' is a broken symbolic link to 'no/such/directory'" >&2
     echo "fake/cd.fish (line 123):" >&2
-    echo "builtin cd \$argv" >&2
-    echo "^" >&2
+    echo "    builtin cd \$argv" >&2
+    echo "    ^" >&2
     echo "in function 'cd' with arguments 'broken-symbolic-link'" >&2
     echo "called on line 123 of file fake/cd.fish" >&2
 else
@@ -324,8 +324,8 @@ else
 end
 # CHECKERR: cd: '{{.*}}/broken-symbolic-link' is a broken symbolic link to 'no/such/directory'
 # CHECKERR: {{.*}}/cd.fish (line {{\d+}}):
-# CHECKERR: builtin cd $argv
-# CHECKERR: ^
+# CHECKERR: {{^}}    builtin cd $argv
+# CHECKERR: {{^}}    ^
 # CHECKERR: in function 'cd' with arguments 'broken-symbolic-link'
 # CHECKERR: called on line {{\d+}} of file {{.*}}/cd.fish
 
@@ -333,8 +333,8 @@ end
 if set -q nosymlinks
     echo "cd: 'fake/broken-symbolic-link' is a broken symbolic link to 'no/such/directory'" >&2
     echo "fake/cd.fish (line 123):" >&2
-    echo "builtin cd \$argv" >&2
-    echo "^" >&2
+    echo "    builtin cd \$argv" >&2
+    echo "    ^" >&2
     echo "in function 'cd' with arguments 'broken-symbolic-link'" >&2
     echo "called on line 123 of file fake/cd.fish" >&2
 else
@@ -345,8 +345,8 @@ else
 end
 # CHECKERR: cd: '{{.*}}/broken-symbolic-link' is a broken symbolic link to 'no/such/directory'
 # CHECKERR: {{.*}}/cd.fish (line {{\d+}}):
-# CHECKERR: builtin cd $argv
-# CHECKERR: ^
+# CHECKERR: {{^}}    builtin cd $argv
+# CHECKERR: {{^}}    ^
 # CHECKERR: in function 'cd' with arguments 'broken-symbolic-link'
 # CHECKERR: called on line {{\d+}} of file {{.*}}/cd.fish
 
@@ -409,8 +409,8 @@ HOME="" cd
 if set -q nosymlinks
     echo "cd: Too many levels of symbolic links: 'loop1'" >&2
     echo "fake/cd.fish (line 123):" >&2
-    echo "builtin cd \$argv" >&2
-    echo "^" >&2
+    echo "    builtin cd \$argv" >&2
+    echo "    ^" >&2
     echo "in function 'cd' with arguments 'loop1'" >&2
     echo "called on line 123 of file fake/cd.fish" >&2
 else
@@ -420,8 +420,8 @@ else
 end
 # CHECKERR: cd: Too many levels of symbolic links: 'loop1'
 # CHECKERR: {{.*}}/cd.fish (line {{\d+}}):
-# CHECKERR: builtin cd $argv
-# CHECKERR: ^
+# CHECKERR: {{^}}    builtin cd $argv
+# CHECKERR: {{^}}    ^
 # CHECKERR: in function 'cd' with arguments 'loop1'
 # CHECKERR: called on line {{\d+}} of file {{.*}}/cd.fish
 
@@ -431,8 +431,8 @@ cd (string repeat 4096 a)
 # CHECKERR: cd: {{.+}}
 # CHECKERR: cd: Unknown error trying to locate directory '{{.*}}'
 # CHECKERR: {{.*}}/cd.fish (line {{\d+}}):
-# CHECKERR: builtin cd $argv
-# CHECKERR: ^
+# CHECKERR: {{^}}    builtin cd $argv
+# CHECKERR: {{^}}    ^
 # CHECKERR: in function 'cd' with arguments '{{.*}}'
 # CHECKERR: called on line {{\d+}} of file {{.*}}/cd.fish
 

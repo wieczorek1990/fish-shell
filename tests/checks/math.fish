@@ -117,62 +117,62 @@ math -s0 "-$x * $y"
 # by littlecheck.
 not math '2 - '
 # CHECKERR: math: Error: Too few arguments
-# CHECKERR: '2 - '
-# CHECKERR:     ^
+# CHECKERR: {{^}}'2 - '
+# CHECKERR: {{^}}     ^
 not math 'ncr(1)'
 # CHECKERR: math: Error: Too few arguments
-# CHECKERR: 'ncr(1)'
-# CHECKERR:       ^
+# CHECKERR: {{^}}'ncr(1)'
+# CHECKERR: {{^}}       ^
 
 math "min()"
 # CHECKERR: math: Error: Too few arguments
-# CHECKERR: 'min()'
-# CHECKERR:      ^
+# CHECKERR: {{^}}'min()'
+# CHECKERR: {{^}}      ^
 
 # There is no "blah" function.
 not math 'blah()'
 # CHECKERR: math: Error: Unknown function
-# CHECKERR: 'blah()'
-# CHECKERR:  ^~~^
+# CHECKERR: {{^}}'blah()'
+# CHECKERR: {{^}} ^~~^
 
 # There is also no "Blah" function.
 not math 'Blah()'
 # CHECKERR: math: Error: Unknown function
-# CHECKERR: 'Blah()'
-# CHECKERR:  ^~~^
+# CHECKERR: {{^}}'Blah()'
+# CHECKERR: {{^}} ^~~^
 
 math n + 4
 # CHECKERR: math: Error: Unknown function
-# CHECKERR: 'n + 4'
-# CHECKERR:  ^
+# CHECKERR: {{^}}'n + 4'
+# CHECKERR: {{^}} ^
 
 not math 'sin()'
 # CHECKERR: math: Error: Too few arguments
-# CHECKERR: 'sin()'
-# CHECKERR:      ^
+# CHECKERR: {{^}}'sin()'
+# CHECKERR: {{^}}      ^
 not math '2 + 2 4'
 # CHECKERR: math: Error: Missing operator
 # CHECKERR: '2 + 2 4'
 # This regex to check whitespace - the error appears between the second 2 and the 4!
 # (right after the 2)
 # CHECKERR: {{^}}      ^
-printf '<%s>\n' (math '2 + 2      4' 2>&1)
-# CHECK: <math: Error: Missing operator>
-# CHECK: <'2 + 2      4'>
-# CHECK: <      ^~~~~^>
+math '2 + 2      4'
+# CHECKERR: math: Error: Missing operator
+# CHECKERR: {{^}}'2 + 2      4'
+# CHECKERR: {{^}}      ^~~~~^
 
 not math '(1 2)'
 # CHECKERR: math: Error: Missing operator
-# CHECKERR: '(1 2)'
-# CHECKERR:    ^
+# CHECKERR: {{^}}'(1 2)'
+# CHECKERR: {{^}}   ^
 not math '(1 pi)'
 # CHECKERR: math: Error: Missing operator
-# CHECKERR: '(1 pi)'
-# CHECKERR:    ^
+# CHECKERR: {{^}}'(1 pi)'
+# CHECKERR: {{^}}   ^
 not math '(1 pow 1,2)'
 # CHECKERR: math: Error: Missing operator
-# CHECKERR: '(1 pow 1,2)'
-# CHECKERR:    ^
+# CHECKERR: {{^}}'(1 pow 1,2)'
+# CHECKERR: {{^}}   ^
 not math
 # CHECKERR: math: expected >= 1 arguments; got 0
 not math -s 12
@@ -192,18 +192,18 @@ not math 2^53 + 1
 not math -2^53 - 1
 # CHECKERR: math: Error: Result magnitude is too large
 # CHECKERR: '-2^53 - 1'
-printf '<%s>\n' (not math 1 / 0 2>&1)
-# CHECK: <math: Error: Division by zero>
-# CHECK: <'1 / 0'>
-# CHECK: <   ^>
-printf '<%s>\n' (math 1 % 0 - 5 2>&1)
-# CHECK: <math: Error: Division by zero>
-# CHECK: <'1 % 0 - 5'>
-# CHECK: <   ^>
-printf '<%s>\n' (math min 1 / 0, 5 2>&1)
-# CHECK: <math: Error: Division by zero>
-# CHECK: <'min 1 / 0, 5'>
-# CHECK: <       ^>
+math 1 / 0
+# CHECKERR: math: Error: Division by zero
+# CHECKERR: {{^}}'1 / 0'
+# CHECKERR: {{^}}   ^
+math 1 % 0 - 5
+# CHECKERR: math: Error: Division by zero
+# CHECKERR: {{^}}'1 % 0 - 5'
+# CHECKERR: {{^}}   ^
+math min 1 / 0, 5
+# CHECKERR: math: Error: Division by zero
+# CHECKERR: {{^}}'min 1 / 0, 5'
+# CHECKERR: {{^}}       ^
 
 # Validate "x" as multiplier
 math 0x2 # Hex
@@ -211,8 +211,8 @@ math 5 x 4
 math 2x 4
 math 2 x4 # ERROR
 # CHECKERR: math: Error: Unknown function
-# CHECKERR: '2 x4'
-# CHECKERR:    ^^
+# CHECKERR: {{^}}'2 x4'
+# CHECKERR: {{^}}   ^^
 math 0x 3
 # CHECK: 2
 # CHECK: 20
@@ -221,8 +221,8 @@ math 0x 3
 
 math "42 >= 1337"
 # CHECKERR: math: Error: Logical operations are not supported, use `test` instead
-# CHECKERR: '42 >= 1337'
-# CHECKERR:     ^
+# CHECKERR: {{^}}'42 >= 1337'
+# CHECKERR: {{^}}    ^
 
 math "bitand(0xFE, 1)"
 # CHECK: 0
@@ -243,13 +243,13 @@ math 'log 16'
 
 math 'log(16'
 # CHECKERR: math: Error: Missing closing parenthesis
-# CHECKERR: 'log(16'
-# CHECKERR:       ^
+# CHECKERR: {{^}}'log(16'
+# CHECKERR: {{^}}       ^
 
 math '(2'
 # CHECKERR: math: Error: Missing closing parenthesis
-# CHECKERR: '(2'
-# CHECKERR:   ^
+# CHECKERR: {{^}}'(2'
+# CHECKERR: {{^}}   ^
 
 math --base=16 255 / 15
 # CHECK: 0x11
@@ -296,13 +296,13 @@ math sin cos 2 x pi
 
 math pow sin 3, 5
 # CHECKERR: math: Error: Too many arguments
-# CHECKERR: 'pow sin 3, 5'
-# CHECKERR: ^
+# CHECKERR: {{^}}'pow sin 3, 5'
+# CHECKERR: {{^}}            ^
 
 math pow sin 3, 5 + 2
 # CHECKERR: math: Error: Too many arguments
-# CHECKERR: 'pow sin 3, 5 + 2'
-# CHECKERR:             ^~~~^
+# CHECKERR: {{^}}'pow sin 3, 5 + 2'
+# CHECKERR: {{^}}            ^~~~^
 
 math sin pow 3, 5
 # CHECK: {{-0\.890009|-0.890\d*}}
@@ -320,14 +320,14 @@ math pow 2 x cos'(-pi)', 2
 # If this test hangs, that's reintroduced!
 math 'ncr(0/0, 1)'
 # CHECKERR: math: Error: Division by zero
-# CHECKERR: 'ncr(0/0, 1)'
-# CHECKERR:       ^
+# CHECKERR: {{^}}'ncr(0/0, 1)'
+# CHECKERR: {{^}}      ^
 
 # Variadic functions require at least one argument
 math min
 # CHECKERR: math: Error: Too few arguments
-# CHECKERR: 'min'
-# CHECKERR:    ^
+# CHECKERR: {{^}}'min'
+# CHECKERR: {{^}}    ^
 math min 2
 # CHECK: 2
 math min 2, 3, 4, 5, -10, 1
@@ -337,7 +337,7 @@ math min 2, 3, 4, 5, -10, 1
 # except when the call is the last argument.
 math 'min 5, 4, 3, ncr 2, 1, 5'
 # CHECKERR: math: Error: Too many arguments
-# CHECKERR:      'min 5, 4, 3, ncr 2, 1, 5'
+# CHECKERR: {{^}}'min 5, 4, 3, ncr 2, 1, 5'
 # CHECKERR: {{^}}                        ^
 math 'min 5, 4, 3, ncr(2, 1), 5'
 # CHECK: 2
@@ -386,17 +386,17 @@ echo 7 + 8 | math not an expression
 
 math (string repeat -n 1000 1) 2>| string shorten -m50 --char=""
 # CHECK: math: Error: Number is too large
-# CHECK: '1111111111111111111111111111111111111111111111111
-# CHECK:  ^
+# CHECK: {{^}}'1111111111111111111111111111111111111111111111111
+# CHECK: {{^}} ^
 
 math 0x0_2.0P-0x3
 # CHECKERR: math: Error: Unknown function
-# CHECKERR: '0x0_2.0P-0x3'
-# CHECKERR:            ^^
+# CHECKERR: {{^}}'0x0_2.0P-0x3'
+# CHECKERR: {{^}}           ^^
 math 0x0_2.0P-f
 # CHECKERR: math: Error: Unexpected token
-# CHECKERR: '0x0_2.0P-f'
-# CHECKERR:           ^
+# CHECKERR: {{^}}'0x0_2.0P-f'
+# CHECKERR: {{^}} ^
 math "22 / 5 - 5"
 # CHECK: -0.6
 math -s 0 --scale-mode=truncate "22 / 5 - 5"

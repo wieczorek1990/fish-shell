@@ -29,6 +29,6 @@ line-number
 bind -M
 # CHECKERR: bind: -M: option requires an argument
 # CHECKERR: {{.*}} (line 29):
-# CHECKERR: bind -M
-# CHECKERR: ^
+# CHECKERR: {{^}}bind -M
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help bind' for related documentation)

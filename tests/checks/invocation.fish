@@ -87,15 +87,15 @@ count < $tmp/nostartup.prof
 
 $fish --no-config -c 'echo notprinted; echo foo | exec true; echo banana'
 # CHECKERR: fish: The 'exec' command can not be used in a pipeline
-# CHECKERR: echo notprinted; echo foo | exec true; echo banana
-# CHECKERR:                             ^~~~~~~~^
+# CHECKERR: {{^}}echo notprinted; echo foo | exec true; echo banana
+# CHECKERR: {{^}}                            ^~~~~~~~^
 
 # Running multiple command lists continues even if one has a syntax error.
 $fish --no-config -c 'echo $$ oh no syntax error' -c 'echo this works'
 # CHECK: this works
 # CHECKERR: fish: $$ is not the pid. In fish, please use $fish_pid.
-# CHECKERR: echo $$ oh no syntax error
-# CHECKERR: ^
+# CHECKERR: {{^}}echo $$ oh no syntax error
+# CHECKERR: {{^}}      ^
 
 $fish --no-config .
 # CHECKERR: error: Unable to read input file: Is a directory
@@ -103,13 +103,13 @@ $fish --no-config .
 
 $fish --no-config -c 'echo notprinted; echo foo; a=b'
 # CHECKERR: fish: Unsupported use of '='. In fish, please use 'set a b'.
-# CHECKERR: echo notprinted; echo foo; a=b
-# CHECKERR:                            ^~^
+# CHECKERR: {{^}}echo notprinted; echo foo; a=b
+# CHECKERR: {{^}}                           ^~^
 
 $fish --no-config -c 'echo notprinted | and true'
 # CHECKERR: fish: The 'and' command can not be used in a pipeline
-# CHECKERR: echo notprinted | and true
-# CHECKERR:                   ^~^
+# CHECKERR: {{^}}echo notprinted | and true
+# CHECKERR: {{^}}                  ^~^
 
 $fish --no-config --features
 # CHECKERR: fish: --features: option requires an argument

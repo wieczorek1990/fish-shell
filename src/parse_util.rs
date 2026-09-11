@@ -6,7 +6,7 @@ use crate::{
     },
     builtins::builtin_exists,
     common::{valid_var_name, valid_var_name_char},
-    expand::{ExpandFlags, ExpandResultCode, expand_one, expand_to_command_and_args},
+    expand::{ExpandFlags, expand_one, expand_to_command_and_args},
     operation_context::OperationContext,
     parse_constants::{
         ERROR_BAD_VAR_CHAR1, ERROR_BRACKETED_VARIABLE_QUOTED1, ERROR_BRACKETED_VARIABLE1,
@@ -75,7 +75,7 @@ pub fn slice_length(input: &wstr) -> Option<usize> {
     None
 }
 
-#[derive(Debug, Default, Eq, PartialEq)]
+#[derive(Debug, Default, PartialEq)]
 pub struct CommandSubstitution {
     range: Range<usize>,
     num_closing: usize,
@@ -405,7 +405,11 @@ fn get_job_or_process_extent(
     let mut result = cmdsub_range.clone();
     for token in Tokenizer::new(
         &buff[cmdsub_range.clone()],
-        TokFlags::ACCEPT_UNFINISHED | TokFlags::SHOW_COMMENTS,
+        TokFlags {
+            accept_unfinished: true,
+            show_comments: true,
+            ..Default::default()
+        },
     ) {
         let tok_begin = token.offset();
         if finished {
@@ -461,7 +465,13 @@ pub fn get_token_extent(buff: &wstr, cursor_pos: usize) -> (Range<usize>, Range<
     assert!(cmdsubst_begin <= buff.len());
     assert!(cmdsubst_range.end <= buff.len());
 
-    for token in Tokenizer::new(&buff[cmdsubst_range], TokFlags::ACCEPT_UNFINISHED) {
+    for token in Tokenizer::new(
+        &buff[cmdsubst_range],
+        TokFlags {
+            accept_unfinished: true,
+            ..Default::default()
+        },
+    ) {
         let tok_begin = token.offset();
         let mut tok_end = tok_begin;
 
@@ -918,10 +928,14 @@ impl<'a> IndentVisitor<'a> {
                 }
                 quoted = !quoted;
             };
-            for _token in
-                Tokenizer::with_quote_events(part, TokFlags::ACCEPT_UNFINISHED, &mut callback)
-            {
-            }
+            for _token in Tokenizer::with_quote_events(
+                part,
+                TokFlags {
+                    accept_unfinished: true,
+                    ..Default::default()
+                },
+                &mut callback,
+            ) {}
         }
         if !quoted {
             self.indents[done..range.end].fill(self.indent);
@@ -1320,7 +1334,10 @@ pub fn detect_errors_in_argument(
         |begin: usize, end: usize, out_errors: &mut Option<&mut ParseErrorList>| -> bool {
             let Some(unesc) = unescape_string(
                 &arg_src[begin..end],
-                UnescapeStringStyle::Script(UnescapeFlags::SPECIAL),
+                UnescapeStringStyle::Script(UnescapeFlags {
+                    special: true,
+                    ..Default::default()
+                }),
             ) else {
                 if out_errors.is_some() {
                     let src = arg_src.as_char_slice();
@@ -1642,18 +1659,16 @@ fn detect_errors_in_decorated_statement(
         // Make a new error list so we can fix the offset for just those, then append later.
         let mut new_errors = ParseErrorList::new();
         let mut command = WString::new();
-        if matches!(
-            expand_to_command_and_args(
-                unexp_command,
-                &mut OperationContext::empty(),
-                &mut command,
-                None,
-                Some(&mut new_errors),
-                true, /* skip wildcards */
-            )
-            .result,
-            ExpandResultCode::Error | ExpandResultCode::Overflow
-        ) {
+        if expand_to_command_and_args(
+            unexp_command,
+            &mut OperationContext::empty(),
+            &mut command,
+            None,
+            Some(&mut new_errors),
+            true, /* skip wildcards */
+        )
+        .failed()
+        {
             errored = true;
         }
 

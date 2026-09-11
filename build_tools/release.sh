@@ -77,6 +77,32 @@ integration_branch=$(
 sed -n 1p CHANGELOG.rst | grep -q '^fish .*(released .*)$'
 sed -n 2p CHANGELOG.rst | grep -q '^===*$'
 
+gh_api_repo() {
+    path=$1
+    shift
+    command gh api \
+        -H "Accept: application/vnd.github+json" \
+        -H "X-GitHub-Api-Version: 2022-11-28" \
+        "/repos/$repository_owner/fish-shell/$path" \
+        "$@"
+}
+minor_version=${version%.*}
+milestone_version=$(
+    if echo "$version" | grep -q '\.0$'; then
+        echo "$minor_version"
+    else
+        echo "$version"
+    fi
+)
+milestone_number() {
+    gh_api_repo milestones?state=open |
+        jq --arg name "fish $1" '
+            .[] | select(.title == $name) | .number
+        '
+}
+milestone_number=$(milestone_number "$milestone_version")
+[ -n "$milestone_number" ]
+
 changelog_title="fish $version (released $(date +'%B %d, %Y'))"
 sed -i \
     -e "1c$changelog_title" \
@@ -157,6 +183,30 @@ do
     TIMEOUT=30 gh run watch "$run_id" ||:
     sleep 5
 done
+
+{
+# Approve macos-codesign
+# TODO what if current user can't approve?
+gh_pending_deployments() {
+    gh_api_repo "actions/runs/$run_id/pending_deployments" "$@"
+}
+while {
+    environment_id=$(gh_pending_deployments | jq .[].environment.id)
+    [ -z "$environment_id" ]
+}
+do
+    sleep 5
+done
+echo '
+        {
+            "environment_ids": ['"$environment_id"'],
+            "state": "approved",
+            "comment": "Approved via ./build_tools/release.sh"
+        }
+    ' |
+gh_pending_deployments --method POST --input=-
+}
+
 actual_tag_oid=$(git ls-remote "$remote" |
     awk '$2 == "refs/tags/'"$version"'" { print $1 }')
 [ "$tag_oid" = "$actual_tag_oid" ]
@@ -183,7 +233,6 @@ CopyDocs() {
     cp -r "$tmpdir/local-tarball/fish-$version/cargo/fish-docs/html" "$fish_site/site/docs/$1"
     git -C "$fish_site" add "site/docs/$1"
 }
-minor_version=${version%.*}
 CopyDocs "$minor_version"
 latest_release=$(
     releases=$(git tag | grep '^[0-9]*\.[0-9]*\.[0-9]*.*' |
@@ -213,40 +262,6 @@ rm -rf "$tmpdir"
     " | sed 's,^\s*| \?,,')"
 )
 
-gh_api_repo() {
-    path=$1
-    shift
-    command gh api \
-        -H "Accept: application/vnd.github+json" \
-        -H "X-GitHub-Api-Version: 2022-11-28" \
-        "/repos/$repository_owner/fish-shell/$path" \
-        "$@"
-}
-
-# Approve macos-codesign
-# TODO what if current user can't approve?
-gh_pending_deployments() {
-    gh_api_repo "actions/runs/$run_id/pending_deployments" "$@"
-}
-while {
-    environment_id=$(gh_pending_deployments | jq .[].environment.id)
-    [ -z "$environment_id" ]
-}
-do
-    sleep 5
-done
-echo '
-        {
-            "environment_ids": ['"$environment_id"'],
-            "state": "approved",
-            "comment": "Approved via ./build_tools/release.sh"
-        }
-    ' |
-gh_pending_deployments --method POST --input=-
-
-# Await completion.
-gh run watch "$run_id"
-
 while {
     ! draft=$(gh release view "$version" --json=isDraft --jq=.isDraft) \
     || [ "$draft" = true ]
@@ -255,20 +270,7 @@ do
     sleep 20
 done
 
-milestone_version="$(
-    if echo "$version" | grep -q '\.0$'; then
-        echo "$minor_version"
-    else
-        echo "$version"
-    fi
-)"
-milestone_number() {
-    gh_api_repo milestones?state=open |
-        jq --arg name "fish $1" '
-            .[] | select(.title == $name) | .number
-        '
-}
-gh_api_repo milestones/"$(milestone_number "$milestone_version")" \
+gh_api_repo milestones/"$milestone_number" \
     --method PATCH --raw-field state=closed
 next_minor_version=$(echo "$minor_version" |
     awk -F. '{ printf "%s.%s", $1, $2+1 }')

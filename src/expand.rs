@@ -3,6 +3,8 @@
 //! from using a more clever memory allocation scheme, perhaps an evil combination of talloc,
 //! string buffers and reference counting.
 
+use std::ops::DerefMut as _;
+
 use crate::{
     builtins::{
         STATUS_CMD_ERROR, STATUS_CMD_UNKNOWN, STATUS_EXPAND_ERROR, STATUS_ILLEGAL_CMD,
@@ -10,7 +12,7 @@ use crate::{
         STATUS_UNMATCHED_WILDCARD,
     },
     common::valid_var_name_char,
-    complete::{CompleteFlags, Completion, CompletionList, CompletionReceiver},
+    complete::{Completion, CompletionList, CompletionReceiver},
     env::{EnvVar, Environment},
     exec::exec_subshell_for_expand,
     history::{History, history_id},
@@ -22,7 +24,6 @@ use crate::{
     wildcard::{WildcardResult, wildcard_expand_string, wildcard_has_internal},
     wutil::{normalize_path, wcstoi, wcstoi_partial},
 };
-use bitflags::bitflags;
 use fish_common::{
     EscapeFlags, EscapeStringStyle, UnescapeFlags, UnescapeStringStyle, escape, escape_string,
     escape_string_for_double_quotes, unescape_string,
@@ -32,51 +33,113 @@ use fish_util::wcsfilecmp_glob;
 use fish_wcstringutil::{join_strings, trim};
 use fish_widestring::{
     ANY_CHAR, ANY_STRING, ANY_STRING_RECURSIVE, BRACE_BEGIN, BRACE_END, BRACE_SEP, BRACE_SPACE,
-    HOME_DIRECTORY, INTERNAL_SEPARATOR, PROCESS_EXPAND_SELF, VARIABLE_EXPAND,
-    VARIABLE_EXPAND_EMPTY, VARIABLE_EXPAND_SINGLE, osstr2wcstring,
+    HOME_DIRECTORY, INTERNAL_SEPARATOR, PROCESS_EXPAND_SELF, SLICE_BEGIN, SLICE_END,
+    VARIABLE_EXPAND, VARIABLE_EXPAND_EMPTY, VARIABLE_EXPAND_SINGLE, osstr2wcstring,
 };
 use nix::unistd::{User, getpid};
 
-bitflags! {
-    /// Set of flags controlling expansions.
-    #[derive(Copy, Clone, Default)]
-    pub struct ExpandFlags : u16 {
-        /// Fail expansion if there is a command substitution.
-        const FAIL_ON_CMDSUBST = 1 << 0;
-        /// Skip variable expansion.
-        const SKIP_VARIABLES = 1 << 1;
-        /// Skip wildcard expansion.
-        const SKIP_WILDCARDS = 1 << 2;
-        /// The expansion is being done for tab or auto completions. Returned completions may have the
-        /// wildcard as a prefix instead of a match.
-        const FOR_COMPLETIONS = 1 << 3;
-        /// Only match files that are executable by the current user.
-        const EXECUTABLES_ONLY = 1 << 4;
-        /// Only match directories.
-        const DIRECTORIES_ONLY = 1 << 5;
-        /// Generate descriptions, stored in the description field of completions.
-        const GEN_DESCRIPTIONS = 1 << 6;
-        /// Un-expand home directories to tildes after.
-        const PRESERVE_HOME_TILDES = 1 << 7;
-        /// Allow fuzzy matching.
-        const FUZZY_MATCH = 1 << 8;
-        /// Allows matching a leading dot even if the wildcard does not contain one.
-        /// By default, wildcards only match a leading dot literally; this is why e.g. '*' does not
-        /// match hidden files.
-        const ALLOW_NONLITERAL_LEADING_DOT = 1 << 10;
-        /// Do expansions specifically to support cd. This means using CDPATH as a list of potential
-        /// working directories, and to use logical instead of physical paths.
-        const SPECIAL_FOR_CD = 1 << 11;
-        /// Do expansions specifically for cd autosuggestion. This is to differentiate between cd
-        /// completions and cd autosuggestions.
-        const SPECIAL_FOR_CD_AUTOSUGGESTION = 1 << 12;
-        /// Do expansions specifically to support external command completions. This means using PATH as
-        /// a list of potential working directories.
-        const SPECIAL_FOR_COMMAND = 1 << 13;
-        /// The token has an unclosed brace, so don't add a space.
-        const NO_SPACE_FOR_UNCLOSED_BRACE = 1 << 14;
-        /// Skip command substitutions.
-        const SKIP_CMDSUBST = 1 << 15;
+#[derive(Copy, Clone, PartialEq)]
+pub enum CmdsubstMode {
+    /// Expand command substitions, as usual.
+    Expand,
+    /// Fail expansion.
+    Fail,
+    /// Forward command substitutions as-is.
+    Skip,
+}
+
+/// Do expansions specifically to support cd. This means using CDPATH as a list of potential
+/// working directories, and to use logical instead of physical paths.
+#[derive(Copy, Clone, PartialEq)]
+pub struct ForCdArgument {
+    pub for_autosuggestion: bool,
+}
+
+#[derive(Copy, Clone, PartialEq)]
+pub enum PathFilter {
+    /// Do expansions specifically to support external command completions. This means using PATH as
+    /// a list of potential working directories.
+    ExecutableFile,
+    /// Do expansions for directories only.
+    Directory {
+        for_cd_argument: Option<ForCdArgument>,
+    },
+}
+
+/// Flags controlling expansions.
+#[derive(Copy, Clone)]
+pub struct ExpandFlags {
+    //# Which expansion stages to skip / fail.
+    /// How to handle command substitutions.
+    pub cmdsubst: CmdsubstMode,
+    /// Skip variable expansion.
+    pub skip_variables: bool,
+    /// Skip wildcard expansion.
+    pub skip_wildcards: bool,
+
+    pub path_filter: Option<PathFilter>,
+
+    //# Knobs for wildcard matching.
+    /// Allow fuzzy matching.
+    pub fuzzy_match: bool,
+    /// Allows matching a leading dot even if the wildcard does not contain one.
+    /// By default, wildcards only match a leading dot literally; this is why e.g. '*' does not
+    /// match hidden files.
+    pub allow_nonliteral_leading_dot: bool,
+
+    //# Output options.
+    /// The expansion is being done for tab or auto completions. Returned completions may have the
+    /// wildcard as a prefix instead of a match.
+    pub for_completions: bool,
+    /// Generate descriptions, stored in the description field of completions.
+    pub gen_descriptions: bool,
+    /// Un-expand home directories to tildes after.
+    pub preserve_home_tildes: bool,
+    /// The token has an unclosed brace, so don't add a space.
+    pub no_space_for_unclosed_brace: bool,
+}
+
+impl Default for ExpandFlags {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl ExpandFlags {
+    const DEFAULT: Self = Self {
+        cmdsubst: CmdsubstMode::Expand,
+        skip_variables: false,
+        skip_wildcards: false,
+        for_completions: false,
+        gen_descriptions: false,
+        preserve_home_tildes: false,
+        fuzzy_match: false,
+        allow_nonliteral_leading_dot: false,
+        path_filter: None,
+        no_space_for_unclosed_brace: false,
+    };
+    pub(crate) const FAIL_ON_CMDSUBST: Self = Self {
+        cmdsubst: CmdsubstMode::Fail,
+        ..Self::DEFAULT
+    };
+    pub(crate) const NO_IO: Self = Self {
+        skip_wildcards: true,
+        ..Self::FAIL_ON_CMDSUBST
+    };
+
+    pub(crate) fn executables_only(&self) -> bool {
+        matches!(self.path_filter, Some(PathFilter::ExecutableFile))
+    }
+    pub(crate) fn directories_only(&self) -> bool {
+        matches!(self.path_filter, Some(PathFilter::Directory { .. }))
+    }
+    pub(crate) fn is_cd_argument(&self) -> bool {
+        matches!(
+            self.path_filter,
+            Some(PathFilter::Directory {
+                for_cd_argument: Some(_)
+            })
+        )
     }
 }
 
@@ -158,7 +221,7 @@ pub fn expand_one(
     ctx: &mut OperationContext,
     errors: Option<&mut ParseErrorList>,
 ) -> bool {
-    if !flags.contains(ExpandFlags::FOR_COMPLETIONS) && expand_is_clean(s) {
+    if !flags.for_completions && expand_is_clean(s) {
         return true;
     }
 
@@ -198,7 +261,7 @@ pub fn expand_to_command_and_args(
 
     let mut eflags = ExpandFlags::FAIL_ON_CMDSUBST;
     if skip_wildcards {
-        eflags |= ExpandFlags::SKIP_WILDCARDS;
+        eflags.skip_wildcards = true;
     }
 
     let mut completions = CompletionList::new();
@@ -392,15 +455,17 @@ fn parse_slice(
     input: &wstr,
     idx: &mut Vec<i64>,
     array_size: usize,
+    unescaped: bool,
 ) -> Result<usize, (usize, ParseSliceError)> {
     let size = i64::try_from(array_size).unwrap();
     let mut pos = 1; // skip past the opening square bracket
+    let end_char = if unescaped { SLICE_END } else { ']' };
 
     loop {
         while input.char_at(pos).is_whitespace() || input.char_at(pos) == INTERNAL_SEPARATOR {
             pos += 1;
         }
-        if input.char_at(pos) == ']' {
+        if input.char_at(pos) == end_char {
             pos += 1;
             break;
         }
@@ -452,7 +517,7 @@ fn parse_slice(
 
             // If we are at the last index range expression  then a missing end-index means the
             // range spans until the last item.
-            let tmp1 = if input.char_at(pos) == ']' {
+            let tmp1 = if input.char_at(pos) == end_char {
                 -1 // last index
             } else {
                 let mut consumed = 0;
@@ -529,7 +594,7 @@ fn expand_variables(
     // last_idx may be 1 past the end of the string, but no further.
     assert!(last_idx <= instr.len(), "Invalid last_idx");
     if last_idx == 0 {
-        if !out.add(instr) {
+        if out.add(instr).is_err() {
             return append_overflow_error(errors, None);
         }
         return ExpandResult::ok();
@@ -552,7 +617,7 @@ fn expand_variables(
     }
     if varexp_char_idx == usize::MAX {
         // No variable expand char, we're done.
-        if !out.add(instr) {
+        if out.add(instr).is_err() {
             return append_overflow_error(errors, None);
         }
         return ExpandResult::ok();
@@ -611,7 +676,7 @@ fn expand_variables(
     let slice_start = var_name_stop;
     let mut var_idx_list = vec![];
 
-    if instr.as_char_slice().get(slice_start) == Some(&'[') {
+    if instr.as_char_slice().get(slice_start) == Some(&SLICE_BEGIN) {
         all_values = false;
         // If a variable is missing, behave as though we have one value, so that $var[1] always
         // works.
@@ -625,6 +690,7 @@ fn expand_variables(
             &instr[slice_start..],
             &mut var_idx_list,
             effective_val_count,
+            true,
         ) {
             Ok(offset) => {
                 var_name_and_slice_stop = slice_start + offset;
@@ -729,7 +795,7 @@ fn expand_variables(
         // Normal cartesian-product expansion.
         for item in var_item_list {
             if varexp_char_idx == 0 && var_name_and_slice_stop == instr.len() {
-                if !out.add(item) {
+                if out.add(item).is_err() {
                     return append_overflow_error(errors, None);
                 }
             } else {
@@ -796,7 +862,7 @@ fn expand_braces(
     }
 
     if brace_count > 0 {
-        if !flags.contains(ExpandFlags::FOR_COMPLETIONS) {
+        if !flags.for_completions {
             syntax_error = true;
         } else {
             // The user hasn't typed an end brace yet; make one up and append it, then expand
@@ -829,7 +895,7 @@ fn expand_braces(
                 *c = ' ';
             }
         }
-        if !out.add(input) {
+        if out.add(input).is_err() {
             return append_overflow_error(errors, None);
         }
         return ExpandResult::ok();
@@ -900,7 +966,7 @@ pub fn expand_cmdsubst(
             return ExpandResult::make_error(STATUS_EXPAND_ERROR);
         }
         Ok(None) => {
-            if !out.add(input) {
+            if out.add(input).is_err() {
                 return append_overflow_error(errors, None);
             }
             return ExpandResult::ok();
@@ -971,24 +1037,29 @@ pub fn expand_cmdsubst(
     if input.as_char_slice().get(tail_begin) == Some(&'[') {
         let mut slice_idx = vec![];
         let slice_begin = tail_begin;
-        let slice_end = match parse_slice(&input[slice_begin..], &mut slice_idx, sub_res.len()) {
-            Ok(offset) => slice_begin + offset,
-            Err((bad_pos, error)) => {
-                match error {
-                    ParseSliceError::ZeroIndex => {
-                        append_syntax_error!(
-                            errors,
-                            slice_begin + bad_pos,
-                            "array indices start at 1, not 0."
-                        );
+        let slice_end =
+            match parse_slice(&input[slice_begin..], &mut slice_idx, sub_res.len(), false) {
+                Ok(offset) => slice_begin + offset,
+                Err((bad_pos, error)) => {
+                    match error {
+                        ParseSliceError::ZeroIndex => {
+                            append_syntax_error!(
+                                errors,
+                                slice_begin + bad_pos,
+                                "array indices start at 1, not 0."
+                            );
+                        }
+                        ParseSliceError::InvalidIndex => {
+                            append_syntax_error!(
+                                errors,
+                                slice_begin + bad_pos,
+                                "Invalid index value"
+                            );
+                        }
                     }
-                    ParseSliceError::InvalidIndex => {
-                        append_syntax_error!(errors, slice_begin + bad_pos, "Invalid index value");
-                    }
+                    return ExpandResult::make_error(STATUS_EXPAND_ERROR);
                 }
-                return ExpandResult::make_error(STATUS_EXPAND_ERROR);
-            }
-        };
+            };
 
         let mut sub_res2 = vec![];
         tail_begin = slice_end;
@@ -1053,7 +1124,7 @@ pub fn expand_cmdsubst(
             whole_item.push_utfstr(&sub_res_joined);
             whole_item.push(INTERNAL_SEPARATOR);
             whole_item.push_utfstr(&tail_item.completion["\"".len()..]);
-            if !out.add(whole_item) {
+            if out.add(whole_item).is_err() {
                 return append_overflow_error(errors, None);
             }
         }
@@ -1062,7 +1133,13 @@ pub fn expand_cmdsubst(
     }
 
     for sub_item in sub_res {
-        let sub_item2 = escape_string(&sub_item, EscapeStringStyle::Script(EscapeFlags::COMMA));
+        let sub_item2 = escape_string(
+            &sub_item,
+            EscapeStringStyle::Script(EscapeFlags {
+                comma: true,
+                ..Default::default()
+            }),
+        );
         for tail_item in &*tail_expand {
             let mut whole_item = WString::new();
             whole_item.reserve(
@@ -1079,7 +1156,7 @@ pub fn expand_cmdsubst(
             whole_item.push_utfstr(&sub_item2);
             whole_item.push(INTERNAL_SEPARATOR);
             whole_item.push_utfstr(&tail_item.completion);
-            if !out.add(whole_item) {
+            if out.add(whole_item).is_err() {
                 return append_overflow_error(errors, None);
             }
         }
@@ -1170,6 +1247,22 @@ fn remove_internal_separator(s: &mut WString, conv: bool) {
     }
 }
 
+fn restore_slice_operator(s: &mut WString) {
+    for idx in s.as_char_slice_mut() {
+        match *idx {
+            SLICE_BEGIN => {
+                *idx = '[';
+            }
+            SLICE_END => {
+                *idx = ']';
+            }
+            _ => {
+                // we ignore all other characters
+            }
+        }
+    }
+}
+
 /// A type that knows how to perform expansions.
 struct Expander<'a, 'b, 'c> {
     /// Operation context for this expansion.
@@ -1199,12 +1292,12 @@ impl<'a, 'b, 'c> Expander<'a, 'b, 'c> {
         mut errors: Option<&'a mut ParseErrorList>,
     ) -> ExpandResult {
         assert!(
-            flags.contains(ExpandFlags::FAIL_ON_CMDSUBST) || ctx.has_parser(),
-            "Must have a parser if not skipping command substitutions"
+            flags.cmdsubst == CmdsubstMode::Fail || ctx.has_parser(),
+            "Must have a parser when expanding command substitutions"
         );
         // Early out. If we're not completing, and there's no magic in the input, we're done.
-        if !flags.contains(ExpandFlags::FOR_COMPLETIONS) && expand_is_clean(&input) {
-            if !out_completions.add(input) {
+        if !flags.for_completions && expand_is_clean(&input) {
+            if out_completions.add(input).is_err() {
                 return append_overflow_error(&mut errors, None);
             }
             return ExpandResult::ok();
@@ -1237,20 +1330,14 @@ impl<'a, 'b, 'c> Expander<'a, 'b, 'c> {
                 }
                 let this_result = (stage)(&mut expand, comp.completion, &mut output_storage);
                 total_result = this_result;
-                if matches!(
-                    total_result.result,
-                    ExpandResultCode::Error | ExpandResultCode::Overflow
-                ) {
+                if total_result.failed() {
                     break;
                 }
             }
 
             // Output becomes our next stage's input.
             completions = output_storage.take();
-            if matches!(
-                total_result.result,
-                ExpandResultCode::Error | ExpandResultCode::Overflow
-            ) {
+            if total_result.failed() {
                 break;
             }
         }
@@ -1267,10 +1354,10 @@ impl<'a, 'b, 'c> Expander<'a, 'b, 'c> {
 
         if total_result == ExpandResultCode::Ok {
             // Unexpand tildes if we want to preserve them (see #647).
-            if flags.contains(ExpandFlags::PRESERVE_HOME_TILDES) {
+            if flags.preserve_home_tildes {
                 expand.unexpand_tildes(&input, &mut completions);
             }
-            if !out_completions.extend(completions) {
+            if out_completions.extend(completions).is_err() {
                 total_result = append_overflow_error(expand.errors, None);
             }
         }
@@ -1279,40 +1366,43 @@ impl<'a, 'b, 'c> Expander<'a, 'b, 'c> {
     }
 
     fn stage_cmdsubst(&mut self, input: WString, out: &mut CompletionReceiver) -> ExpandResult {
-        if self.flags.contains(ExpandFlags::SKIP_CMDSUBST) {
-            if !out.add(input) {
-                return append_overflow_error(self.errors, None);
+        match self.flags.cmdsubst {
+            CmdsubstMode::Skip => {
+                if out.add(input).is_err() {
+                    return append_overflow_error(self.errors, None);
+                }
+                ExpandResult::ok()
             }
-            return ExpandResult::ok();
-        }
-        if self.flags.contains(ExpandFlags::FAIL_ON_CMDSUBST) {
-            let mut cursor = 0;
-            match locate_cmdsubst_range(&input, &mut cursor, true, None, None) {
-                Err(()) => ExpandResult::make_error(STATUS_EXPAND_ERROR),
-                Ok(None) => {
-                    if !out.add(input) {
-                        return append_overflow_error(self.errors, None);
+            CmdsubstMode::Fail => {
+                let mut cursor = 0;
+                match locate_cmdsubst_range(&input, &mut cursor, true, None, None) {
+                    Err(()) => ExpandResult::make_error(STATUS_EXPAND_ERROR),
+                    Ok(None) => {
+                        if out.add(input).is_err() {
+                            return append_overflow_error(self.errors, None);
+                        }
+                        ExpandResult::ok()
                     }
-                    ExpandResult::ok()
-                }
-                Ok(Some(cmdsub)) => {
-                    append_cmdsub_error!(
-                        self.errors,
-                        cmdsub.opening_paren_offset(),
-                        cmdsub.end() - 1,
-                        wgettext!(
-                            "command substitutions not allowed in command position. Try var=(your-cmd) $var ..."
-                        )
-                    );
-                    ExpandResult::make_error(STATUS_EXPAND_ERROR)
+                    Ok(Some(cmdsub)) => {
+                        append_cmdsub_error!(
+                            self.errors,
+                            cmdsub.opening_paren_offset(),
+                            cmdsub.end() - 1,
+                            wgettext!(
+                                "command substitutions not allowed in command position. Try var=(your-cmd) $var ..."
+                            )
+                        );
+                        ExpandResult::make_error(STATUS_EXPAND_ERROR)
+                    }
                 }
             }
-        } else {
-            assert!(
-                self.ctx.has_parser(),
-                "Must have a parser to expand command substitutions"
-            );
-            expand_cmdsubst(input, self.ctx, out, self.errors)
+            CmdsubstMode::Expand => {
+                assert!(
+                    self.ctx.has_parser(),
+                    "Must have a parser to expand command substitutions"
+                );
+                expand_cmdsubst(input, self.ctx, out, self.errors)
+            }
         }
     }
 
@@ -1322,23 +1412,38 @@ impl<'a, 'b, 'c> Expander<'a, 'b, 'c> {
         // strings from the commandline.
         let mut next = unescape_string(
             &input,
-            UnescapeStringStyle::Script(UnescapeFlags::SPECIAL | UnescapeFlags::INCOMPLETE),
+            UnescapeStringStyle::Script(UnescapeFlags {
+                special: true,
+                incomplete: true,
+                ..Default::default()
+            }),
         )
         .unwrap_or_default();
 
-        if self.flags.contains(ExpandFlags::SKIP_VARIABLES) {
+        if self.flags.skip_variables {
             for i in next.as_char_slice_mut() {
                 if [VARIABLE_EXPAND, VARIABLE_EXPAND_SINGLE].contains(i) {
                     *i = '$';
+                } else if *i == SLICE_BEGIN {
+                    *i = '[';
+                } else if *i == SLICE_END {
+                    *i = ']';
                 }
             }
-            if !out.add(next) {
+            if out.add(next).is_err() {
                 return append_overflow_error(self.errors, None);
             }
             ExpandResult::ok()
         } else {
             let size = next.len();
-            expand_variables(next, out, size, self.ctx.vars(), self.errors)
+            let before_count = out.len();
+            let result = expand_variables(next, out, size, self.ctx.vars(), self.errors);
+            if result.success() {
+                for comp in out.deref_mut().iter_mut().skip(before_count) {
+                    restore_slice_operator(&mut comp.completion);
+                }
+            }
+            result
         }
     }
 
@@ -1351,13 +1456,13 @@ impl<'a, 'b, 'c> Expander<'a, 'b, 'c> {
         mut input: WString,
         out: &mut CompletionReceiver,
     ) -> ExpandResult {
-        remove_internal_separator(&mut input, self.flags.contains(ExpandFlags::SKIP_WILDCARDS));
+        remove_internal_separator(&mut input, self.flags.skip_wildcards);
 
         expand_home_directory(&mut input, self.ctx.vars());
         if !feature_test(FeatureFlag::RemovePercentSelf) {
             expand_percent_self(&mut input);
         }
-        if !out.add(input) {
+        if out.add(input).is_err() {
             return append_overflow_error(self.errors, None);
         }
         ExpandResult::ok()
@@ -1371,10 +1476,10 @@ impl<'a, 'b, 'c> Expander<'a, 'b, 'c> {
         let mut result = ExpandResult::ok();
 
         let has_wildcard = wildcard_has_internal(&path_to_expand); // e.g. ANY_STRING
-        let for_completions = self.flags.contains(ExpandFlags::FOR_COMPLETIONS);
-        let skip_wildcards = self.flags.contains(ExpandFlags::SKIP_WILDCARDS);
+        let for_completions = self.flags.for_completions;
+        let skip_wildcards = self.flags.skip_wildcards;
 
-        if has_wildcard && self.flags.contains(ExpandFlags::EXECUTABLES_ONLY) {
+        if has_wildcard && self.flags.executables_only() {
             // don't do wildcard expansion for executables, see issue #785
         } else if (for_completions && !skip_wildcards) || has_wildcard {
             // We either have a wildcard, or we don't have a wildcard but we're doing completion
@@ -1386,49 +1491,46 @@ impl<'a, 'b, 'c> Expander<'a, 'b, 'c> {
             // which may be CDPATH if the special flag is set.
             let working_dir = self.ctx.vars().get_pwd_slash();
             let mut effective_working_dirs = vec![];
-            let for_cd = self.flags.contains(ExpandFlags::SPECIAL_FOR_CD);
-            let for_command = self.flags.contains(ExpandFlags::SPECIAL_FOR_COMMAND);
-            if !for_cd && !for_command {
-                // Common case.
+
+            // We can handle executables and cd arguments mostly the same way. There's the
+            // following differences:
+            //
+            // 1. An empty CDPATH should be treated as '.', but an empty PATH should be left empty
+            // (no commands can be found). Also, an empty element in either is treated as '.' for
+            // consistency with POSIX shells. Note that we rely on the latter by having called
+            // `munge_colon_delimited_array()` for these special env vars. Thus we do not
+            // special-case them here.
+            //
+            // 2. PATH is only "one level," while CDPATH is multiple levels. That is, input like
+            // 'foo/bar' should resolve against CDPATH, but not PATH.
+            //
+            // In either case, we ignore the path if we start with ./ or /. Also ignore it if we are
+            // doing command completion and we contain a slash, per IEEE 1003.1, chapter 8 under
+            // PATH.
+            let for_cd = self.flags.is_cd_argument();
+            let for_command = self.flags.executables_only();
+            if (!for_cd && !for_command)
+                || path_to_expand.starts_with(L!("/"))
+                || path_to_expand.starts_with(L!("./"))
+                || path_to_expand.starts_with(L!("../"))
+                || (for_command && path_to_expand.contains('/'))
+            {
                 effective_working_dirs.push(working_dir);
             } else {
-                // Either special_for_command or special_for_cd. We can handle these
-                // mostly the same. There's the following differences:
-                //
-                // 1. An empty CDPATH should be treated as '.', but an empty PATH should be left empty
-                // (no commands can be found). Also, an empty element in either is treated as '.' for
-                // consistency with POSIX shells. Note that we rely on the latter by having called
-                // `munge_colon_delimited_array()` for these special env vars. Thus we do not
-                // special-case them here.
-                //
-                // 2. PATH is only "one level," while CDPATH is multiple levels. That is, input like
-                // 'foo/bar' should resolve against CDPATH, but not PATH.
-                //
-                // In either case, we ignore the path if we start with ./ or /. Also ignore it if we are
-                // doing command completion and we contain a slash, per IEEE 1003.1, chapter 8 under
-                // PATH.
-                if path_to_expand.starts_with(L!("/"))
-                    || path_to_expand.starts_with(L!("./"))
-                    || path_to_expand.starts_with(L!("../"))
-                    || (for_command && path_to_expand.contains('/'))
-                {
-                    effective_working_dirs.push(working_dir);
-                } else {
-                    // Get the PATH/CDPATH and CWD. Perhaps these should be passed in. An empty CDPATH
-                    // implies just the current directory, while an empty PATH is left empty.
-                    let mut paths = self
-                        .ctx
-                        .vars()
-                        .get(if for_cd { L!("CDPATH") } else { L!("PATH") })
-                        .map(|var| var.as_list().to_owned())
-                        .unwrap_or_default();
+                // Get the PATH/CDPATH and CWD. Perhaps these should be passed in. An empty CDPATH
+                // implies just the current directory, while an empty PATH is left empty.
+                let mut paths = self
+                    .ctx
+                    .vars()
+                    .get(if for_cd { L!("CDPATH") } else { L!("PATH") })
+                    .map(|var| var.as_list().to_owned())
+                    .unwrap_or_default();
 
-                    // The current directory is always valid.
-                    paths.push(if for_cd { L!(".") } else { L!("") }.to_owned());
-                    for next_path in paths {
-                        effective_working_dirs
-                            .push(path_apply_working_directory(&next_path, &working_dir));
-                    }
+                // The current directory is always valid.
+                paths.push(if for_cd { L!(".") } else { L!("") }.to_owned());
+                for next_path in paths {
+                    effective_working_dirs
+                        .push(path_apply_working_directory(&next_path, &working_dir));
                 }
             }
 
@@ -1452,7 +1554,7 @@ impl<'a, 'b, 'c> Expander<'a, 'b, 'c> {
 
             let mut expanded = expanded_recv.take();
             expanded.sort_by(|a, b| wcsfilecmp_glob(&a.completion, &b.completion));
-            if !out.extend(expanded) {
+            if out.extend(expanded).is_err() {
                 result = ExpandResult::new(ExpandResultCode::Overflow);
             }
         } else {
@@ -1461,7 +1563,7 @@ impl<'a, 'b, 'c> Expander<'a, 'b, 'c> {
             // completion on the floor.
             #[allow(clippy::collapsible_if)]
             if !for_completions {
-                if !out.add(path_to_expand) {
+                if out.add(path_to_expand).is_err() {
                     return append_overflow_error(self.errors, None);
                 }
             }
@@ -1490,7 +1592,7 @@ impl<'a, 'b, 'c> Expander<'a, 'b, 'c> {
         //
         // However if we are not completing, just expanding, then expansion just produces the full paths
         // so we should unconditionally unexpand tildes.
-        let only_replacers = self.flags.contains(ExpandFlags::FOR_COMPLETIONS);
+        let only_replacers = self.flags.for_completions;
 
         // Helper to decide whether to process a completion.
         let should_process = |c: &Completion| !only_replacers || c.replaces_token();
@@ -1514,13 +1616,15 @@ impl<'a, 'b, 'c> Expander<'a, 'b, 'c> {
                     .replace_range(..home.len(), &username_with_tilde);
 
                 // And mark that our tilde is literal, so it doesn't try to escape it.
-                comp.flags |= CompleteFlags::DONT_ESCAPE_TILDES;
+                if comp.flags.wants_escaping() {
+                    comp.flags.dont_escape_tildes();
+                }
             }
         }
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ExpandResultCode {
     /// There was an error, for example, unmatched braces.
     Error,
@@ -1545,6 +1649,23 @@ pub struct ExpandResult {
     /// If expansion resulted in an error, this is an appropriate value with which to populate
     /// $status.
     pub status: libc::c_int,
+}
+
+impl ExpandResult {
+    #[must_use]
+    #[inline]
+    pub fn failed(&self) -> bool {
+        matches!(
+            self.result,
+            ExpandResultCode::Error | ExpandResultCode::Overflow
+        )
+    }
+
+    #[must_use]
+    #[inline]
+    pub fn success(&self) -> bool {
+        !self.failed()
+    }
 }
 
 #[cfg(test)]
@@ -1632,6 +1753,10 @@ mod tests {
 
         // Testing parameter expansion
         let noflags = ExpandFlags::default();
+        let for_completions = ExpandFlags {
+            for_completions: true,
+            ..Default::default()
+        };
 
         expand_test!("foo", noflags, "foo", "Strings do not expand to themselves");
 
@@ -1643,19 +1768,25 @@ mod tests {
         );
         expand_test!(
             "a*",
-            ExpandFlags::SKIP_WILDCARDS,
+            ExpandFlags {
+                skip_wildcards: true,
+                ..noflags
+            },
             "a*",
             "Cannot skip wildcard expansion"
         );
         expand_test!(
             "/bin/l\\0",
-            ExpandFlags::FOR_COMPLETIONS,
+            for_completions,
             (),
             "Failed to handle null escape in expansion"
         );
         expand_test!(
             "foo\\$bar",
-            ExpandFlags::SKIP_VARIABLES,
+            ExpandFlags {
+                skip_variables: true,
+                ..noflags
+            },
             "foo$bar",
             "Failed to handle dollar sign in variable-skipping expansion"
         );
@@ -1789,7 +1920,7 @@ mod tests {
 
         expand_test!(
             "test/fish_expand_test/BA",
-            ExpandFlags::FOR_COMPLETIONS,
+            for_completions,
             (
                 "test/fish_expand_test/bar",
                 "test/fish_expand_test/bax/",
@@ -1800,7 +1931,7 @@ mod tests {
 
         expand_test!(
             "test/fish_expand_test/BA",
-            ExpandFlags::FOR_COMPLETIONS,
+            for_completions,
             (
                 "test/fish_expand_test/bar",
                 "test/fish_expand_test/bax/",
@@ -1811,14 +1942,20 @@ mod tests {
 
         expand_test!(
             "test/fish_expand_test/bb/yyy",
-            ExpandFlags::FOR_COMPLETIONS,
+            for_completions,
             (), /* nothing! */
             "Wrong fuzzy matching 1"
         );
 
+        let fuzzy_comp = ExpandFlags {
+            for_completions: true,
+            fuzzy_match: true,
+            ..noflags
+        };
+
         expand_test!(
             "test/fish_expand_test/bb/x",
-            ExpandFlags::FOR_COMPLETIONS | ExpandFlags::FUZZY_MATCH,
+            fuzzy_comp,
             "",
             // we just expect the empty string since this is an exact match
             "Wrong fuzzy matching 2"
@@ -1826,7 +1963,6 @@ mod tests {
 
         // Some vswprintfs refuse to append ANY_STRING in a format specifiers, so don't use
         // format_string here.
-        let fuzzy_comp = ExpandFlags::FOR_COMPLETIONS | ExpandFlags::FUZZY_MATCH;
         let any_str_str = ANY_STRING.to_string();
         expand_test!(
             "test/fish_expand_test/b/xx*",

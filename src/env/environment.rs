@@ -48,7 +48,7 @@ use std::{
 static UVARS_LOCALLY_MODIFIED: RelaxedAtomicBool = RelaxedAtomicBool::new(false);
 
 /// Return values for `EnvStack::set()`.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum EnvStackSetResult {
     #[default]
     Ok, // The variable was set successfully.
@@ -320,8 +320,7 @@ impl EnvStack {
                 )
             );
         }
-        let global_exported_mode =
-            EnvSetMode::new_at_early_startup(EnvMode::GLOBAL | EnvMode::EXPORT);
+        let global_exported_mode = EnvSetMode::new_at_early_startup(EnvMode::GLOBAL_EXPORTED);
         self.set_one(L!("PWD"), global_exported_mode, cwd);
     }
 
@@ -604,7 +603,7 @@ pub fn env_init(paths: Option<&ConfigPaths>, no_config: bool) {
     let vars = EnvStack::globals();
 
     let global_mode = EnvSetMode::new_at_early_startup(EnvMode::GLOBAL);
-    let global_exported_mode = EnvSetMode::new_at_early_startup(EnvMode::GLOBAL | EnvMode::EXPORT);
+    let global_exported_mode = EnvSetMode::new_at_early_startup(EnvMode::GLOBAL_EXPORTED);
 
     let env_iter: Vec<_> = std::env::vars_os()
         .map(|(k, v)| (osstr2wcstring(k), osstr2wcstring(v)))
@@ -789,7 +788,7 @@ pub fn env_init(paths: Option<&ConfigPaths>, no_config: bool) {
             }
 
             // Look for a global exported variable with the same name.
-            let global = EnvStack::globals().getf(name, EnvMode::GLOBAL | EnvMode::EXPORT);
+            let global = EnvStack::globals().getf(name, EnvMode::GLOBAL_EXPORTED);
             if global.is_some_and(|x| x.as_string() == uvar.as_string()) {
                 to_skip.push(name.to_owned());
             }

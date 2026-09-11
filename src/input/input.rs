@@ -27,10 +27,10 @@ use std::{
 #[derive(Clone, Debug, PartialEq)]
 pub struct ReadlineCmdEvent {
     pub cmd: ReadlineCmd,
-    /// The sequence of characters in the input mapping which generated this event.
+    /// The triggering key events.
     /// Note that the generic self-insert case does not have any characters, so this would be empty.
     /// This is also empty for invalid Unicode code points, which produce multiple characters.
-    pub seq: WString,
+    pub key_events: Vec<CharEvent>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -110,6 +110,7 @@ impl CharEvent {
         matches!(self, CharEvent::Readline(_) | CharEvent::Command(_))
     }
 
+    #[cfg(test)]
     pub fn get_char(&self) -> char {
         let CharEvent::Key(kevt) = self else {
             panic!("Not a char type");
@@ -160,12 +161,8 @@ impl CharEvent {
         })
     }
 
-    pub fn from_readline(cmd: ReadlineCmd) -> CharEvent {
-        Self::from_readline_seq(cmd, WString::new())
-    }
-
-    pub fn from_readline_seq(cmd: ReadlineCmd, seq: WString) -> CharEvent {
-        CharEvent::Readline(ReadlineCmdEvent { cmd, seq })
+    pub fn from_readline(cmd: ReadlineCmd, key_events: Vec<CharEvent>) -> CharEvent {
+        Self::Readline(ReadlineCmdEvent { cmd, key_events })
     }
 
     pub fn from_check_exit() -> CharEvent {
@@ -173,13 +170,15 @@ impl CharEvent {
     }
 }
 
+type Text = [char; 4];
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct KeyEvent {
     pub key: Key,
     pub(crate) explicit_modifiers: bool,
     pub shifted_codepoint: char,
-    pub base_layout_codepoint: char,
-    pub associated_text: [char; 4],
+    base_layout_codepoint: char,
+    pub associated_text: Text,
 }
 
 pub type CharIterator = std::iter::TakeWhile<std::array::IntoIter<char, 4>, fn(&char) -> bool>;
@@ -194,7 +193,7 @@ impl KeyEvent {
         codepoint: char,
         shifted_key: Option<char>,
         base_layout_key: Option<char>,
-        associated_text: [char; 4],
+        associated_text: Text,
     ) -> Self {
         Self {
             key: Key::new(modifiers, codepoint),
@@ -212,7 +211,7 @@ impl KeyEvent {
     }
 
     pub fn text_to_insert(&self) -> Option<CharIterator> {
-        let until_zero = |cs: [char; 4]| {
+        let until_zero = |cs: Text| {
             Some(
                 cs.into_iter()
                     .take_while((|c| *c != '\0') as fn(&char) -> bool),
@@ -248,6 +247,11 @@ impl KeyEvent {
         }
         Some(c)
     }
+
+    pub fn base_layout_codepoint(&self) -> Option<char> {
+        (self.modifiers.is_some() && self.base_layout_codepoint != '\0')
+            .then_some(self.base_layout_codepoint)
+    }
 }
 
 impl From<Key> for KeyEvent {
@@ -278,7 +282,7 @@ impl std::ops::DerefMut for KeyEvent {
 
 /// Hackish: the input style, which describes how char events (only) are applied to the command
 /// line. Note this is set only after applying bindings; it is not set from readb().
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum CharInputStyle {
     // Insert characters normally.
     Normal,
@@ -401,18 +405,18 @@ impl InputData {
     }
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct BackgroundColorQuery {
     pub result: Option<xterm_color::Color>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum CursorPositionQueryReason {
     NewPrompt,
     WindowHeightChange,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CursorPositionQuery {
     pub reason: CursorPositionQueryReason,
     pub result: Option<ViewportPosition>,
@@ -427,13 +431,13 @@ impl CursorPositionQuery {
     }
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct RecurrentQuery {
     pub background_color: Option<BackgroundColorQuery>,
     pub cursor_position: Option<CursorPositionQuery>,
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum TerminalQuery {
     Initial,
     Recurrent(RecurrentQuery),
@@ -937,8 +941,8 @@ mod tests {
         let mut queue = InputEventQueue::new(0, None);
         queue.push_back(CharEvent::from_char('a'));
         queue.push_back(CharEvent::from_char('b'));
-        queue.push_back(CharEvent::from_readline(ReadlineCmd::Undo));
-        queue.push_back(CharEvent::from_readline(ReadlineCmd::Redo));
+        queue.push_back(CharEvent::from_readline(ReadlineCmd::Undo, vec![]));
+        queue.push_back(CharEvent::from_readline(ReadlineCmd::Redo, vec![]));
         queue.push_back(CharEvent::from_char('c'));
         queue.push_back(CharEvent::from_char('d'));
         queue.promote_interruptions_to_front();

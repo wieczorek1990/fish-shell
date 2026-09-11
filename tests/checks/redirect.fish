@@ -155,10 +155,10 @@ set -S foo
 set -l fish (status fish-path)
 $fish --no-config -c 'true <&?fail'
 #CHECKERR: fish: Requested redirection to '?fail', which is not a valid file descriptor
-#CHECKERR: true <&?fail
-#CHECKERR: ^~~~~~^
+#CHECKERR: {{^}}true <&?fail
+#CHECKERR: {{^}}     ^~~~~~^
 
 $fish --no-config -c 'true <?&fail'
 #CHECKERR: fish: Expected a string, but found a '&'
-#CHECKERR: true <?&fail
-#CHECKERR: ^
+#CHECKERR: {{^}}true <?&fail
+#CHECKERR: {{^}}       ^

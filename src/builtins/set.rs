@@ -2,10 +2,7 @@ use super::prelude::*;
 use crate::{
     builtins::Error,
     common::valid_var_name,
-    env::{
-        EnvMode, EnvStackSetResult, EnvVar, EnvVarFlags, Environment, INHERITED_VARS,
-        handle_env_return,
-    },
+    env::{EnvMode, EnvStackSetResult, EnvVar, Environment, INHERITED_VARS, handle_env_return},
     err_fmt, err_str,
     event::{self, Event},
     expand::{expand_escape_string, expand_escape_variable},
@@ -17,20 +14,13 @@ use crate::{
 use fish_common::{EscapeFlags, EscapeStringStyle, escape, escape_string, help_section};
 use fish_widestring::ELLIPSIS_CHAR;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct Options {
     print_help: bool,
     show: bool,
-    local: bool,
-    function: bool,
-    global: bool,
-    exportv: bool,
+    set_mode: ParserEnvSetMode,
     erase: bool,
     list: bool,
-    unexport: bool,
-    pathvar: bool,
-    unpathvar: bool,
-    universal: bool,
     query: bool,
     shorten_ok: bool,
     append: bool,
@@ -44,16 +34,9 @@ impl Default for Options {
         Self {
             print_help: false,
             show: false,
-            local: false,
-            function: false,
-            global: false,
-            exportv: false,
+            set_mode: ParserEnvSetMode::user(EnvMode::default()),
             erase: false,
             list: false,
-            unexport: false,
-            pathvar: false,
-            unpathvar: false,
-            universal: false,
             query: false,
             shorten_ok: true,
             append: false,
@@ -64,26 +47,45 @@ impl Default for Options {
     }
 }
 
-impl Options {
-    fn env_mode(&self) -> EnvMode {
-        let mut scope = EnvMode::empty();
-        for (is_mode, mode) in [
-            (self.local, EnvMode::LOCAL),
-            (self.function, EnvMode::FUNCTION),
-            (self.global, EnvMode::GLOBAL),
-            (self.exportv, EnvMode::EXPORT),
-            (self.unexport, EnvMode::UNEXPORT),
-            (self.universal, EnvMode::UNIVERSAL),
-            (self.pathvar, EnvMode::PATHVAR),
-            (self.unpathvar, EnvMode::UNPATHVAR),
-        ] {
-            if is_mode {
-                scope |= mode;
-            }
-        }
-        scope
+pub(crate) fn set_export_mode(
+    parser: &Parser,
+    streams: &mut IoStreams,
+    cmd: &wstr,
+    export: &mut Option<bool>,
+    value: bool,
+) -> Result<(), ErrorCode> {
+    // Variables can only have one export status.
+    if *export == Some(!value) {
+        err_str!(Error::EXPORT_UNEXPORT)
+            .cmd(cmd)
+            .full_trailer(parser)
+            .finish(streams);
+        return Err(STATUS_INVALID_ARGS);
     }
+    *export = Some(value);
+    Ok(())
+}
 
+pub(crate) fn set_pathvar_mode(
+    parser: &Parser,
+    streams: &mut IoStreams,
+    cmd: &wstr,
+    pathvar: &mut Option<bool>,
+    value: bool,
+) -> Result<(), ErrorCode> {
+    // Variables can only have one path status.
+    if *pathvar == Some(!value) {
+        err_str!(Error::PATH_UNPATH)
+            .cmd(cmd)
+            .full_trailer(parser)
+            .finish(streams);
+        return Err(STATUS_INVALID_ARGS);
+    }
+    *pathvar = Some(value);
+    Ok(())
+}
+
+impl Options {
     fn parse(
         cmd: &wstr,
         args: &mut [&wstr],
@@ -128,10 +130,10 @@ impl Options {
                     opts.erase = true;
                     opts.preserve_failure_exit_status = false;
                 }
-                'f' => opts.function = true,
-                'g' => opts.global = true,
+                'f' => opts.set_mode.mode.function = true,
+                'g' => opts.set_mode.mode.global = true,
                 'h' => opts.print_help = true,
-                'l' => opts.local = true,
+                'l' => opts.set_mode.mode.local = true,
                 'n' => {
                     opts.list = true;
                     opts.preserve_failure_exit_status = false;
@@ -141,12 +143,21 @@ impl Options {
                     opts.query = true;
                     opts.preserve_failure_exit_status = false;
                 }
-                'x' => opts.exportv = true,
-                'u' => opts.unexport = true,
-                PATH_ARG => opts.pathvar = true,
-                UNPATH_ARG => opts.unpathvar = true,
+                'x' => {
+                    set_export_mode(parser, streams, cmd, &mut opts.set_mode.mode.export, true)?;
+                }
+                'u' => {
+                    set_export_mode(parser, streams, cmd, &mut opts.set_mode.mode.export, false)?;
+                }
+                PATH_ARG => {
+                    set_pathvar_mode(parser, streams, cmd, &mut opts.set_mode.mode.pathvar, true)?;
+                }
+                UNPATH_ARG => {
+                    set_pathvar_mode(parser, streams, cmd, &mut opts.set_mode.mode.pathvar, false)?;
+                }
+
                 NO_EVENT_ARG => opts.no_event = true,
-                'U' => opts.universal = true,
+                'U' => opts.set_mode.mode.universal = true,
                 'L' => opts.shorten_ok = false,
                 'S' => {
                     opts.show = true;
@@ -246,7 +257,12 @@ impl Options {
         }
 
         // Variables can only have one scope...
-        if [opts.local, opts.function, opts.global, opts.universal]
+        if [
+            opts.set_mode.mode.local,
+            opts.set_mode.mode.function,
+            opts.set_mode.mode.global,
+            opts.set_mode.mode.universal,
+        ]
             .into_iter()
             .filter(|b| *b)
             .count()
@@ -261,26 +277,8 @@ impl Options {
             return Err(STATUS_INVALID_ARGS);
         }
 
-        // Variables can only have one export status.
-        if opts.exportv && opts.unexport {
-            err_str!(Error::EXPORT_UNEXPORT)
-                .cmd(cmd)
-                .full_trailer(parser)
-                .finish(streams);
-            return Err(STATUS_INVALID_ARGS);
-        }
-
-        // Variables can only have one path status.
-        if opts.pathvar && opts.unpathvar {
-            err_str!(Error::PATH_UNPATH)
-                .cmd(cmd)
-                .full_trailer(parser)
-                .finish(streams);
-            return Err(STATUS_INVALID_ARGS);
-        }
-
         // Trying to erase and (un)export at the same time doesn't make sense.
-        if opts.erase && (opts.exportv || opts.unexport) {
+        if opts.erase && opts.set_mode.mode.export.is_some() {
             err_str!(Error::INVALID_OPT_COMBO)
                 .cmd(cmd)
                 .full_trailer(parser)
@@ -290,13 +288,13 @@ impl Options {
 
         // The --show flag cannot be combined with any other flag.
         if opts.show
-            && (opts.local
-                || opts.function
-                || opts.global
+            && (opts.set_mode.mode.local
+                || opts.set_mode.mode.function
+                || opts.set_mode.mode.global
                 || opts.erase
                 || opts.list
-                || opts.exportv
-                || opts.universal)
+                || opts.set_mode.mode.export.is_some()
+                || opts.set_mode.mode.universal)
         {
             err_str!(Error::INVALID_OPT_COMBO)
                 .cmd(cmd)
@@ -326,7 +324,7 @@ fn warn_if_uvar_shadows_global(
     streams: &mut IoStreams,
     parser: &Parser,
 ) {
-    if opts.universal
+    if opts.set_mode.mode.universal
         && parser.is_interactive()
         && parser.vars().getf(dest, EnvMode::GLOBAL).is_some()
     {
@@ -345,12 +343,11 @@ fn env_set_reporting_errors(
     cmd: &wstr,
     opts: &Options,
     key: &wstr,
-    mode: EnvMode,
+    mode: ParserEnvSetMode,
     list: Vec<WString>,
     streams: &mut IoStreams,
     parser: &mut Parser,
 ) -> EnvStackSetResult {
-    let mode = ParserEnvSetMode::user(mode);
     let retval = if opts.no_event {
         parser.set_var(key, mode, list)
     } else {
@@ -530,7 +527,7 @@ fn erased_at_indexes(mut input: Vec<WString>, mut indexes: Vec<isize>) -> Vec<WS
 /// `set --names` flag was used.
 fn list(opts: &Options, parser: &Parser, streams: &mut IoStreams) -> BuiltinResult {
     let names_only = opts.list;
-    let mut names = parser.vars().get_names(opts.env_mode());
+    let mut names = parser.vars().get_names(opts.set_mode.mode);
     names.sort();
 
     for key in names {
@@ -549,7 +546,7 @@ fn list(opts: &Options, parser: &Parser, streams: &mut IoStreams) -> BuiltinResu
                     }
                     val += &expand_escape_string(history.item_at_index(i).unwrap().str())[..];
                 }
-            } else if let Some(var) = parser.vars().getf_unless_empty(&key, opts.env_mode()) {
+            } else if let Some(var) = parser.vars().getf_unless_empty(&key, opts.set_mode.mode) {
                 val = expand_escape_variable(&var);
             }
             if !val.is_empty() {
@@ -582,7 +579,7 @@ fn query(
     args: &[&wstr],
 ) -> BuiltinResult {
     let mut retval = 0;
-    let mode = opts.env_mode();
+    let mode = opts.set_mode.mode;
 
     // No variables given, this is an error.
     // 255 is the maximum return code we allow.
@@ -616,10 +613,10 @@ fn query(
 }
 
 fn show_scope(var_name: &wstr, scope: EnvMode, streams: &mut IoStreams, vars: &dyn Environment) {
-    let scope_name = match scope {
-        EnvMode::LOCAL => L!("local"),
-        EnvMode::GLOBAL => L!("global"),
-        EnvMode::UNIVERSAL => L!("universal"),
+    let scope_name = match (scope.local, scope.global, scope.universal) {
+        (true, false, false) => L!("local"),
+        (false, true, false) => L!("global"),
+        (false, false, true) => L!("universal"),
         _ => panic!("invalid scope"),
     };
     let Some(var) = vars.getf(var_name, scope) else {
@@ -649,7 +646,7 @@ fn show_scope(var_name: &wstr, scope: EnvMode, streams: &mut IoStreams, vars: &d
     ));
     // HACK: PWD can be set, depending on how you ask.
     // For our purposes it's read-only.
-    if EnvVar::flags_for(var_name).contains(EnvVarFlags::READ_ONLY) {
+    if EnvVar::flags_for(var_name).read_only {
         streams
             .out
             .appendln(" ".chars().chain(wgettext!("(read-only)").chars()));
@@ -670,7 +667,11 @@ fn show_scope(var_name: &wstr, scope: EnvMode, streams: &mut IoStreams, vars: &d
         let value = &vals[i];
         let escaped_val = escape_string(
             value,
-            EscapeStringStyle::Script(EscapeFlags::NO_PRINTABLES | EscapeFlags::NO_QUOTED),
+            EscapeStringStyle::Script(EscapeFlags {
+                no_printables: true,
+                no_quoted: true,
+                ..Default::default()
+            }),
         );
         streams
             .out
@@ -687,7 +688,7 @@ fn show(cmd: &wstr, parser: &Parser, streams: &mut IoStreams, args: &[&wstr]) ->
     let vars = parser.vars();
     if args.is_empty() {
         // show all vars
-        let mut names = vars.get_names(EnvMode::empty());
+        let mut names = vars.get_names(EnvMode::default());
         names.sort();
         for name in names {
             if name == "history" {
@@ -701,7 +702,11 @@ fn show(cmd: &wstr, parser: &Parser, streams: &mut IoStreams, args: &[&wstr]) ->
             if let Some(inherited) = INHERITED_VARS.get().unwrap().get(&name) {
                 let escaped_val = escape_string(
                     inherited,
-                    EscapeStringStyle::Script(EscapeFlags::NO_PRINTABLES | EscapeFlags::NO_QUOTED),
+                    EscapeStringStyle::Script(EscapeFlags {
+                        no_printables: true,
+                        no_quoted: true,
+                        ..Default::default()
+                    }),
                 );
                 streams
                     .out
@@ -736,7 +741,11 @@ fn show(cmd: &wstr, parser: &Parser, streams: &mut IoStreams, args: &[&wstr]) ->
             if let Some(inherited) = INHERITED_VARS.get().unwrap().get(arg) {
                 let escaped_val = escape_string(
                     inherited,
-                    EscapeStringStyle::Script(EscapeFlags::NO_PRINTABLES | EscapeFlags::NO_QUOTED),
+                    EscapeStringStyle::Script(EscapeFlags {
+                        no_printables: true,
+                        no_quoted: true,
+                        ..Default::default()
+                    }),
                 );
                 streams
                     .out
@@ -756,9 +765,10 @@ fn erase(
     args: &[&wstr],
 ) -> BuiltinResult {
     let mut ret = Ok(SUCCESS);
-    let mut erase_with_mode = |mode| {
+    let mut erase_with_mode = |set_mode: ParserEnvSetMode| {
         for arg in args {
-            let Some(split) = split_var_and_indexes(arg, mode, parser.vars(), streams) else {
+            let Some(split) = split_var_and_indexes(arg, set_mode.mode, parser.vars(), streams)
+            else {
                 builtin_print_error_trailer(parser, streams.err, cmd);
                 return Err(STATUS_CMD_ERROR);
             };
@@ -772,7 +782,7 @@ fn erase(
             let retval;
             if split.indexes.is_empty() {
                 // unset the var
-                retval = parser.remove_var(split.varname, ParserEnvSetMode::new(mode));
+                retval = parser.remove_var(split.varname, set_mode);
                 // When a non-existent-variable is unset, return NotFound as $status
                 // but do not emit any errors at the console as a compromise between user
                 // friendliness and correctness.
@@ -792,7 +802,7 @@ fn erase(
                     cmd,
                     opts,
                     split.varname,
-                    mode,
+                    set_mode,
                     result,
                     streams,
                     parser,
@@ -808,44 +818,33 @@ fn erase(
         Ok(())
     };
     // `set -e` is allowed to be called with multiple scopes.
-    let mode = opts.env_mode();
-    let any_scope = EnvMode::ANY_SCOPE;
-    let scopes = mode.intersection(any_scope);
-    if scopes.is_empty() {
-        erase_with_mode(mode)?;
-    } else {
-        // Historical behavior is to go from inner to outer, which may be relevant for scopes that
-        // collide with the function scope (i.e. local and global).
-        assert!(is_subsequence(
-            scopes.iter(),
-            [
-                EnvMode::LOCAL,
-                EnvMode::FUNCTION,
-                EnvMode::GLOBAL,
-                EnvMode::UNIVERSAL
-            ]
-            .into_iter()
-        ));
-        for scope in scopes.iter() {
-            let other_scopes = any_scope - scope;
-            erase_with_mode(mode - other_scopes)?;
+    let scopes: [for<'a> fn(&'a mut EnvMode) -> &'a mut bool; 4] = [
+        |mode| &mut mode.local,
+        |mode| &mut mode.function,
+        |mode| &mut mode.global,
+        |mode| &mut mode.universal,
+    ];
+    // Historical behavior is to go from inner to outer, which may be relevant for scopes that
+    // collide with the function scope (i.e. local and global).
+    let mut erased = false;
+    let mut set_mode = opts.set_mode;
+    for scope in scopes {
+        if *scope(&mut set_mode.mode) {
+            let mut set_mode = set_mode;
+            let mode = &mut set_mode.mode;
+            mode.local = false;
+            mode.function = false;
+            mode.global = false;
+            mode.universal = false;
+            *scope(mode) = true;
+            erase_with_mode(set_mode)?;
+            erased = true;
         }
     }
+    if !erased {
+        erase_with_mode(set_mode)?;
+    }
     ret
-}
-
-fn is_subsequence<T: Eq>(
-    mut lhs: impl Iterator<Item = T>,
-    mut rhs: impl Iterator<Item = T>,
-) -> bool {
-    lhs.all(|l| {
-        for r in rhs.by_ref() {
-            if r == l {
-                return true;
-            }
-        }
-        false
-    })
 }
 
 /// Return a list of new values for the variable `varname`, respecting the `opts`.
@@ -853,13 +852,13 @@ fn is_subsequence<T: Eq>(
 fn new_var_values(
     varname: &wstr,
     opts: &Options,
-    argv: &[&wstr],
+    args: &[&wstr],
     vars: &dyn Environment,
 ) -> Vec<WString> {
     let mut result = vec![];
     if !opts.prepend && !opts.append {
         // Not prepending or appending.
-        result.extend(argv.iter().copied().map(|s| s.to_owned()));
+        result.extend(args.iter().copied().map(|s| s.to_owned()));
     } else {
         // Note: when prepending or appending, we always use default scoping when fetching existing
         // values. For example:
@@ -873,20 +872,20 @@ fn new_var_values(
         }
 
         if opts.prepend {
-            result.splice(0..0, argv.iter().copied().map(|s| s.to_owned()));
+            result.splice(0..0, args.iter().copied().map(|s| s.to_owned()));
         }
 
         if opts.append {
-            result.extend(argv.iter().copied().map(|s| s.to_owned()));
+            result.extend(args.iter().copied().map(|s| s.to_owned()));
         }
     }
     result
 }
 
 /// This handles the more difficult case of setting individual slices of a var.
-fn new_var_values_by_index(split: &SplitVar, argv: &[&wstr]) -> Vec<WString> {
+fn new_var_values_by_index(split: &SplitVar, args: &[&wstr]) -> Vec<WString> {
     assert_eq!(
-        argv.len(),
+        args.len(),
         split.indexes.len(),
         "Must have the same number of indexes as arguments"
     );
@@ -903,7 +902,7 @@ fn new_var_values_by_index(split: &SplitVar, argv: &[&wstr]) -> Vec<WString> {
 
     // For each (index, argument) pair, set the element in our `result` to the replacement string.
     // Extend the list with empty strings as needed. The indexes are 1-based.
-    for (i, arg) in argv.iter().copied().enumerate() {
+    for (i, arg) in args.iter().copied().enumerate() {
         let lidx = usize::try_from(split.indexes[i]).unwrap();
         assert!(lidx >= 1, "idx should have been verified in range already");
         // Convert from 1-based to 0-based.
@@ -923,9 +922,9 @@ fn set_internal(
     opts: &Options,
     parser: &mut Parser,
     streams: &mut IoStreams,
-    argv: &[&wstr],
+    args: &[&wstr],
 ) -> BuiltinResult {
-    if argv.is_empty() {
+    if args.is_empty() {
         err_fmt!(Error::MIN_ARG_COUNT, 1, 0)
             .cmd(cmd)
             .full_trailer(parser)
@@ -933,11 +932,11 @@ fn set_internal(
         return Err(STATUS_INVALID_ARGS);
     }
 
-    let mode = opts.env_mode();
-    let var_expr = argv[0];
-    let argv = &argv[1..];
+    let set_mode = opts.set_mode;
+    let var_expr = args[0];
+    let args = &args[1..];
 
-    let Some(split) = split_var_and_indexes(var_expr, mode, parser.vars(), streams) else {
+    let Some(split) = split_var_and_indexes(var_expr, set_mode.mode, parser.vars(), streams) else {
         builtin_print_error_trailer(parser, streams.err, cmd);
         return Err(STATUS_INVALID_ARGS);
     };
@@ -982,11 +981,11 @@ fn set_internal(
         }
 
         // Argument count and index count must agree.
-        if split.indexes.len() != argv.len() {
+        if split.indexes.len() != args.len() {
             err_fmt!(
                 "given %d indexes but %d values",
                 split.indexes.len(),
-                argv.len()
+                args.len()
             )
             .cmd(cmd)
             .finish(streams);
@@ -996,15 +995,22 @@ fn set_internal(
 
     let new_values = if split.indexes.is_empty() {
         // Handle the simple, common, case. Set the var to the specified values.
-        new_var_values(split.varname, opts, argv, parser.vars())
+        new_var_values(split.varname, opts, args, parser.vars())
     } else {
         // Handle the uncommon case of setting specific slices of a var.
-        new_var_values_by_index(&split, argv)
+        new_var_values_by_index(&split, args)
     };
 
     // Set the value back in the variable stack and fire any events.
-    let retval =
-        env_set_reporting_errors(cmd, opts, split.varname, mode, new_values, streams, parser);
+    let retval = env_set_reporting_errors(
+        cmd,
+        opts,
+        split.varname,
+        set_mode,
+        new_values,
+        streams,
+        parser,
+    );
 
     if retval == EnvStackSetResult::Ok {
         warn_if_uvar_shadows_global(cmd, opts, split.varname, streams, parser);

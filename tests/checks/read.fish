@@ -148,8 +148,8 @@ echo $foo
 echo test | read -n 2147483648 foo
 #CHECKERR: read: Argument '2147483648' is out of range
 #CHECKERR: {{.*}}/checks/read.fish (line {{\d+}}):
-#CHECKERR: echo test | read -n 2147483648 foo
-#CHECKERR: ^
+#CHECKERR: {{^}}echo test | read -n 2147483648 foo
+#CHECKERR: {{^}}^
 #CHECKERR: (Type 'help read' for related documentation)
 
 # read -z tests
@@ -391,8 +391,8 @@ echo $foo $bar
 echo foo | read status
 # CHECKERR: read: status: cannot overwrite read-only variable
 # CHECKERR: {{.*}}read.fish (line {{\d+}}):
-# CHECKERR: echo foo | read status
-# CHECKERR: ^
+# CHECKERR: {{^}}echo foo | read status
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help read' for related documentation)
 echo read $status
 # CHECK: read 2
@@ -404,8 +404,8 @@ set -S var
 echo foo | read -n -1
 # CHECKERR: read: -1: invalid integer
 # CHECKERR: {{.*}}read.fish (line {{\d+}}):
-# CHECKERR: echo foo | read -n -1
-# CHECKERR: ^
+# CHECKERR: {{^}}echo foo | read -n -1
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help read' for related documentation)
 
 echo '1 ( (' | read -lat var
@@ -479,8 +479,8 @@ set -S tokens
 echo 'foo "&" bar' | read -al --tokenize --tokenize-raw tokens
 # CHECKERR: read: invalid option combination, --tokenize and --tokenize-raw are mutually exclusive
 # CHECKERR: {{.*}}checks/read.fish (line {{\d+}}):
-# CHECKERR: echo 'foo "&" bar' | read -al --tokenize --tokenize-raw tokens
-# CHECKERR: ^
+# CHECKERR: {{^}}echo 'foo "&" bar' | read -al --tokenize --tokenize-raw tokens
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help read' for related documentation)
 
 echo '1  {} "{}"' | read -lat var
@@ -499,8 +499,8 @@ printf \xff | { read invalid_utf8; set -S invalid_utf8 }
 echo foo | read -l -p "echo little-p" -P big-P var
 # CHECKERR: read: Options -p and -P cannot be used together
 # CHECKERR: {{.*}}checks/read.fish (line {{\d+}}):
-# CHECKERR: echo foo | read -l -p "echo little-p" -P big-P var
-# CHECKERR: ^
+# CHECKERR: {{^}}echo foo | read -l -p "echo little-p" -P big-P var
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help read' for related documentation)
 
 echo foo | read -d ";" -L var
@@ -515,13 +515,13 @@ echo foo | read -L --tokenize-raw
 echo foo | read -lxu var
 # CHECKERR: read: cannot both export and unexport
 # CHECKERR: {{.*}}checks/read.fish (line {{\d+}}):
-# CHECKERR: echo foo | read -lxu var
-# CHECKERR: ^
+# CHECKERR: {{^}}echo foo | read -lxu var
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help read' for related documentation)
 
 echo foo | read -lf var
 # CHECKERR: read: scope can be only one of: universal function global local
 # CHECKERR: {{.*}}checks/read.fish (line {{\d+}}):
-# CHECKERR: echo foo | read -lf var
-# CHECKERR: ^
+# CHECKERR: {{^}}echo foo | read -lf var
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help read' for related documentation)

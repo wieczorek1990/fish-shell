@@ -18,6 +18,7 @@ use crate::terminal::{Outputter, is_konsole};
 use crate::threads::assert_is_main_thread;
 use crate::wutil::{perror_nix, wcstoi};
 use fish_common::{STDIN_FD, write_loop};
+use fish_feature_flags::{FeatureFlag, feature_test};
 use fish_util::perror;
 use nix::errno::Errno;
 use nix::sys::termios::tcgetattr;
@@ -61,11 +62,11 @@ pub fn xtversion() -> Option<&'static wstr> {
 }
 
 // Facts that affect how we communicate with the TTY.
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum TtyQuirks {
     None,
-    // Running Midnight Commander which can't parse CSI yet.
-    PreCsiMidnightCommander,
+    // Running Midnight Commander which can't parse CSI u yet.
+    PreCsiUMidnightCommander,
     // Running in a terminal where the kitty keyboard protocol might cause problems.
     BuggyKittyKeyboardProtocol,
     // Whether we are running under tmux.
@@ -81,14 +82,16 @@ impl TtyQuirks {
         if vars.get(MIDNIGHT_COMMANDER_SID).is_some()
             && vars.get(L!("__mc_kitty_keyboard")).is_none()
         {
-            PreCsiMidnightCommander
+            PreCsiUMidnightCommander
         } else if get_iterm2_version(xtversion).is_some_and(|v| v < (3, 5, 12))
             || is_konsole(xtversion)
         {
             BuggyKittyKeyboardProtocol
         } else if let Some(version) = get_tmux_version(xtversion) {
             Tmux(version)
-        } else if xtversion.starts_with(L!("WezTerm ")) {
+        } else if xtversion.starts_with(L!("WezTerm "))
+            && !feature_test(FeatureFlag::OmitTermWorkarounds)
+        {
             Wezterm
         } else {
             None
@@ -97,7 +100,7 @@ impl TtyQuirks {
 }
 
 // Helper to determine which keyboard protocols to enable.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 enum ProtocolKind {
     KittyKeyboard, // Kitty keyboard support, producing CSI-u style encoding.
     Other,         // Other protocols (e.g., modifyOtherKeys)
@@ -153,8 +156,8 @@ fn serialize_commands<'a>(cmds: impl Iterator<Item = TerminalCommand<'a>>) -> Bo
 impl TtyQuirks {
     // Determine which keyboard protocol.
     fn get_supported_protocol(&self) -> ProtocolKind {
-        use TtyQuirks::{BuggyKittyKeyboardProtocol, PreCsiMidnightCommander, Wezterm};
-        if *self == PreCsiMidnightCommander {
+        use TtyQuirks::{BuggyKittyKeyboardProtocol, PreCsiUMidnightCommander, Wezterm};
+        if *self == PreCsiUMidnightCommander {
             return ProtocolKind::None;
         }
         if *self == BuggyKittyKeyboardProtocol {

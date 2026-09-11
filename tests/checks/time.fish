@@ -52,19 +52,19 @@ not a=b time true
 
 $fish -c 'time true&'
 #CHECKERR: fish: {{.*}}
-#CHECKERR: time true&
-#CHECKERR: ^~~~~~~~~^
+#CHECKERR: {{^}}time true&
+#CHECKERR: {{^}}^~~~~~~~~^
 
 $fish -c 'not time true&'
 #CHECKERR: fish: {{.*}}
-#CHECKERR: not time true&
+#CHECKERR: {{^}}not time true&
 #FIXME: This error marks the entire statement. Would be cool to mark just `time true&`.
-#CHECKERR: ^~~~~~~~~~~~~^
+#CHECKERR: {{^}}^~~~~~~~~~~~~^
 
 $fish -c 'echo Is it time yet | time cat'
 #CHECKERR: fish: The 'time' command may only be at the beginning of a pipeline
-#CHECKERR: echo Is it time yet | time cat
-#CHECKERR:                       ^~~~~~~^
+#CHECKERR: {{^}}echo Is it time yet | time cat
+#CHECKERR: {{^}}                      ^~~~~~~^
 
 begin
     printf '%s\n' "#!/bin/sh" 'echo No this is Patrick' > time

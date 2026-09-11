@@ -12,16 +12,16 @@
 argparse
 #CHECKERR: argparse: Missing -- separator
 #CHECKERR: {{.*}}checks/argparse.fish (line {{\d+}}):
-#CHECKERR: argparse
-#CHECKERR: ^
+#CHECKERR: {{^}}argparse
+#CHECKERR: {{^}}^
 #CHECKERR: (Type 'help argparse' for related documentation)
 
 # Missing -- is an error
 argparse h/help
 #CHECKERR: argparse: Missing -- separator
 #CHECKERR: {{.*}}checks/argparse.fish (line {{\d+}}):
-#CHECKERR: argparse h/help
-#CHECKERR: ^
+#CHECKERR: {{^}}argparse h/help
+#CHECKERR: {{^}}^
 #CHECKERR: (Type 'help argparse' for related documentation)
 
 # Flags but no option specs is not an error
@@ -38,44 +38,44 @@ end
 argparse h-
 #CHECKERR: argparse: Invalid option spec 'h-' at char '-'
 #CHECKERR: {{.*}}checks/argparse.fish (line {{\d+}}):
-#CHECKERR: argparse h-
-#CHECKERR: ^
+#CHECKERR: {{^}}argparse h-
+#CHECKERR: {{^}}^
 #CHECKERR: (Type 'help argparse' for related documentation)
 argparse /
 #CHECKERR: argparse: Short flag '/' invalid, must be alphanum or '#'
 #CHECKERR: {{.*}}checks/argparse.fish (line {{\d+}}):
-#CHECKERR: argparse /
-#CHECKERR: ^
+#CHECKERR: {{^}}argparse /
+#CHECKERR: {{^}}^
 #CHECKERR: (Type 'help argparse' for related documentation)
 argparse +help
 #CHECKERR: argparse: Short flag '+' invalid, must be alphanum or '#'
 #CHECKERR: {{.*}}checks/argparse.fish (line {{\d+}}):
-#CHECKERR: argparse +help
-#CHECKERR: ^
+#CHECKERR: {{^}}argparse +help
+#CHECKERR: {{^}}^
 #CHECKERR: (Type 'help argparse' for related documentation)
 argparse h/help:
 #CHECKERR: argparse: Invalid option spec 'h/help:' at char ':'
 #CHECKERR: {{.*}}checks/argparse.fish (line {{\d+}}):
-#CHECKERR: argparse h/help:
-#CHECKERR: ^
+#CHECKERR: {{^}}argparse h/help:
+#CHECKERR: {{^}}^
 #CHECKERR: (Type 'help argparse' for related documentation)
 argparse h-help::
 #CHECKERR: argparse: Invalid option spec 'h-help::' at char ':'
 #CHECKERR: {{.*}}checks/argparse.fish (line {{\d+}}):
-#CHECKERR: argparse h-help::
-#CHECKERR: ^
+#CHECKERR: {{^}}argparse h-help::
+#CHECKERR: {{^}}^
 #CHECKERR: (Type 'help argparse' for related documentation)
 argparse h-help=x
 #CHECKERR: argparse: Invalid option spec 'h-help=x' at char 'x'
 #CHECKERR: {{.*}}checks/argparse.fish (line {{\d+}}):
-#CHECKERR: argparse h-help=x
-#CHECKERR: ^
+#CHECKERR: {{^}}argparse h-help=x
+#CHECKERR: {{^}}^
 #CHECKERR: (Type 'help argparse' for related documentation)
 argparse h/
 #CHECKERR: argparse: Invalid option spec 'h/' at char '/'
 #CHECKERR: {{.*}}checks/argparse.fish (line {{\d+}}):
-#CHECKERR: argparse h/
-#CHECKERR: ^
+#CHECKERR: {{^}}argparse h/
+#CHECKERR: {{^}}^
 #CHECKERR: (Type 'help argparse' for related documentation)
 
 # --max-args and --min-args work
@@ -100,14 +100,14 @@ begin
     argparse --name min-max --min-args -1 --
     #CHECKERR: argparse: Invalid --min-args value '-1'
     #CHECKERR: {{.*}}checks/argparse.fish (line {{\d+}}):
-    #CHECKERR: argparse --name min-max --min-args -1 --
-    #CHECKERR: ^
+    #CHECKERR: {{^}}    argparse --name min-max --min-args -1 --
+    #CHECKERR: {{^}}    ^
     #CHECKERR: (Type 'help argparse' for related documentation)
     argparse --name min-max --max-args -1 --
     #CHECKERR: argparse: Invalid --max-args value '-1'
     #CHECKERR: {{.*}}checks/argparse.fish (line {{\d+}}):
-    #CHECKERR: argparse --name min-max --max-args -1 --
-    #CHECKERR: ^
+    #CHECKERR: {{^}}    argparse --name min-max --max-args -1 --
+    #CHECKERR: {{^}}    ^
     #CHECKERR: (Type 'help argparse' for related documentation)
 end
 
@@ -116,8 +116,8 @@ begin
     argparse '#-val=' -- abc -x def
     # CHECKERR: argparse: Implicit int short flag '#' does not allow modifiers like '='
     #CHECKERR: {{.*}}checks/argparse.fish (line {{\d+}}):
-    #CHECKERR: argparse '#-val=' -- abc -x def
-    #CHECKERR: ^
+    #CHECKERR: {{^}}    argparse '#-val=' -- abc -x def
+    #CHECKERR: {{^}}    ^
     #CHECKERR: (Type 'help argparse' for related documentation)
 end
 
@@ -132,8 +132,8 @@ begin
     argparse s/short x/xray s/long -- -s -x --long
     # CHECKERR: argparse: Short flag 's' already defined
     #CHECKERR: {{.*}}checks/argparse.fish (line {{\d+}}):
-    #CHECKERR: argparse s/short x/xray s/long -- -s -x --long
-    #CHECKERR: ^
+    #CHECKERR: {{^}}    argparse s/short x/xray s/long -- -s -x --long
+    #CHECKERR: {{^}}    ^
     #CHECKERR: (Type 'help argparse' for related documentation)
 end
 
@@ -142,8 +142,8 @@ begin
     argparse s/short x/xray l/short -- -s -x --long
     # CHECKERR: argparse: Long flag 'short' already defined
     #CHECKERR: {{.*}}checks/argparse.fish (line {{\d+}}):
-    #CHECKERR: argparse s/short x/xray l/short -- -s -x --long
-    #CHECKERR: ^
+    #CHECKERR: {{^}}    argparse s/short x/xray l/short -- -s -x --long
+    #CHECKERR: {{^}}    ^
     #CHECKERR: (Type 'help argparse' for related documentation)
 end
 
@@ -152,15 +152,15 @@ begin
     argparse '#-val' x/xray 'v#val' -- -s -x --long
     # CHECKERR: argparse: Implicit int flag '#' already defined
     #CHECKERR: {{.*}}checks/argparse.fish (line {{\d+}}):
-    #CHECKERR: argparse '#-val' x/xray 'v#val' -- -s -x --long
-    #CHECKERR: ^
+    #CHECKERR: {{^}}    argparse '#-val' x/xray 'v#val' -- -s -x --long
+    #CHECKERR: {{^}}    ^
     #CHECKERR: (Type 'help argparse' for related documentation)
 
     argparse 'v#val' x/xray '#-val' -- -s -x --long
     # CHECKERR: argparse: Implicit int flag 'v' already defined
     # CHECKERR: {{.*}}checks/argparse.fish (line {{\d+}}):
-    # CHECKERR: argparse 'v#val' x/xray '#-val' -- -s -x --long
-    # CHECKERR: ^
+    # CHECKERR: {{^}}    argparse 'v#val' x/xray '#-val' -- -s -x --long
+    # CHECKERR: {{^}}    ^
     # CHECKERR: (Type 'help argparse' for related documentation)
 end
 
@@ -169,8 +169,8 @@ begin
     argparse 'v#val=' --
     # CHECKERR: argparse: Implicit int short flag 'v' does not allow modifiers like '='
     #CHECKERR: {{.*}}checks/argparse.fish (line {{\d+}}):
-    #CHECKERR: argparse 'v#val=' --
-    #CHECKERR: ^
+    #CHECKERR: {{^}}    argparse 'v#val=' --
+    #CHECKERR: {{^}}    ^
     #CHECKERR: (Type 'help argparse' for related documentation)
 end
 
@@ -405,8 +405,8 @@ begin
     argparse -i --move-unknown --
     #CHECKERR: argparse: --ignore-unknown --move-unknown: options cannot be used together
     #CHECKERR: {{.*}}checks/argparse.fish (line {{\d+}}):
-    #CHECKERR: argparse -i --move-unknown --
-    #CHECKERR: ^
+    #CHECKERR: {{^}}    argparse -i --move-unknown --
+    #CHECKERR: {{^}}    ^
     #CHECKERR: (Type 'help argparse' for related documentation)
 end
 
@@ -690,8 +690,8 @@ begin
     argparse ''
     #CHECKERR: argparse: An option spec must have at least a short or a long flag
     #CHECKERR: {{.*}}checks/argparse.fish (line {{\d+}}):
-    #CHECKERR: argparse ''
-    #CHECKERR: ^
+    #CHECKERR: {{^}}    argparse ''
+    #CHECKERR: {{^}}    ^
     #CHECKERR: (Type 'help argparse' for related documentation)
 end
 
@@ -699,8 +699,8 @@ begin
     argparse -U
     #CHECKERR: argparse: -U: option requires an argument
     #CHECKERR: {{.*}}checks/argparse.fish (line {{\d+}}):
-    #CHECKERR: argparse -U
-    #CHECKERR: ^
+    #CHECKERR: {{^}}    argparse -U
+    #CHECKERR: {{^}}    ^
     #CHECKERR: (Type 'help argparse' for related documentation)
 end
 
@@ -708,8 +708,8 @@ begin
     argparse --unknown-arguments what --
     #CHECKERR: argparse: Invalid --unknown-arguments value 'what'
     #CHECKERR: {{.*}}checks/argparse.fish (line {{\d+}}):
-    #CHECKERR: argparse --unknown-arguments what --
-    #CHECKERR: ^
+    #CHECKERR: {{^}}    argparse --unknown-arguments what --
+    #CHECKERR: {{^}}    ^
     #CHECKERR: (Type 'help argparse' for related documentation)
 end
 
@@ -836,8 +836,8 @@ begin
     argparse (for i in (seq 0 6400); echo "o$i"; end) --
     # CHECKERR: argparse: Too many long-only options
     # CHECKERR: {{.*}}checks/argparse.fish (line {{\d+}}):
-    # CHECKERR: argparse (for i in (seq 0 6400); echo "o$i"; end) --
-    # CHECKERR: ^
+    # CHECKERR: {{^}}    argparse (for i in (seq 0 6400); echo "o$i"; end) --
+    # CHECKERR: {{^}}    ^
     # CHECKERR: (Type 'help argparse' for related documentation)
     set -l
 end

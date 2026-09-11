@@ -10,7 +10,7 @@ use crate::{
         FISH_TERMINAL_COLOR_THEME_VAR, Statuses,
     },
     event::{self, Event},
-    expand::{ExpandFlags, ExpandResultCode, expand_string, replace_home_directory_with_tilde},
+    expand::{ExpandFlags, expand_string, replace_home_directory_with_tilde},
     fds::{BEST_O_SEARCH, open_dir},
     flog, flogf, function,
     io::IoChain,
@@ -372,13 +372,13 @@ impl EvalRes {
 
 /// A newtype for the block index.
 /// This is the naive position in the block list.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BlockId(usize);
 
 /// Controls the behavior when fish itself receives a signal and there are
 /// no blocks on the stack.
 /// The "outermost" parser is responsible for clearing the signal.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub enum CancelBehavior {
     #[default]
     /// Return the signal to the caller
@@ -742,10 +742,7 @@ impl Parser {
         let mut result = vec![];
         for arg in &ast.top().arguments {
             let arg_src = arg.source(arg_list_src);
-            if matches!(
-                expand_string(arg_src.to_owned(), &mut result, flags, ctx, None).result,
-                ExpandResultCode::Error | ExpandResultCode::Overflow
-            ) {
+            if expand_string(arg_src.to_owned(), &mut result, flags, ctx, None).failed() {
                 break; // failed to expand a string
             }
         }
@@ -1379,7 +1376,10 @@ fn append_block_description_to_stack_trace(
                 if !arg.is_empty() {
                     args_str.push_utfstr(&escape_string(
                         arg,
-                        EscapeStringStyle::Script(EscapeFlags::NO_QUOTED),
+                        EscapeStringStyle::Script(EscapeFlags {
+                            no_quoted: true,
+                            ..Default::default()
+                        }),
                     ));
                 } else {
                     args_str.push_str("\"\"");
@@ -1443,7 +1443,7 @@ fn append_block_description_to_stack_trace(
 }
 
 /// Types of blocks.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum BlockType {
     /// While loop block
     WhileBlock,
@@ -1473,7 +1473,7 @@ pub enum BlockType {
 }
 
 /// Possible states for a loop.
-#[derive(Clone, Copy, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Default, PartialEq)]
 pub enum LoopStatus {
     /// current loop block executed as normal
     #[default]

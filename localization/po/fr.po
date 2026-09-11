@@ -2535,6 +2535,9 @@ msgstr ""
 msgid "Creates a function wrapping a command"
 msgstr ""
 
+msgid "Description of abbreviation, shown in completions"
+msgstr ""
+
 msgid "Description of completion"
 msgstr ""
 
@@ -5331,6 +5334,9 @@ msgstr ""
 msgid "Activate debug mode"
 msgstr "Mode débogage"
 
+msgid "Activate input method"
+msgstr ""
+
 msgid "Activate runtime system %Log call"
 msgstr ""
 
@@ -7846,6 +7852,12 @@ msgid "Apply changes from a git patch file or unified patch file"
 msgstr ""
 
 msgid "Apply changes from an arc bundlej"
+msgstr ""
+
+msgid "Apply changes in a chroot directory"
+msgstr ""
+
+msgid "Apply changes in a prefix directory"
 msgstr ""
 
 msgid "Apply changes in the PREFIX_DIR"
@@ -10716,6 +10728,9 @@ msgstr ""
 msgid "Check if certain assertion type is used"
 msgstr ""
 
+msgid "Check if fcitx is running (return 1 if not)"
+msgstr ""
+
 msgid "Check if files and directories are where they should be"
 msgstr ""
 
@@ -11809,6 +11824,9 @@ msgid "Comma separated list of compression methods to be used"
 msgstr ""
 
 msgid "Comma separated list of disks to be migrated"
+msgstr ""
+
+msgid "Comma separated list of resolvers"
 msgstr ""
 
 msgid "Comma separated list to custom config file(s)"
@@ -15093,6 +15111,9 @@ msgstr ""
 msgid "Delete a domain snapshot"
 msgstr ""
 
+msgid "Delete a group"
+msgstr ""
+
 msgid "Delete a key group from a SOPS file"
 msgstr ""
 
@@ -16182,6 +16203,9 @@ msgstr ""
 msgid "Directory to write logs to"
 msgstr ""
 
+msgid "Directory to write output (-dL only)"
+msgstr ""
+
 msgid "Directory to write scripts"
 msgstr ""
 
@@ -16515,6 +16539,9 @@ msgstr ""
 msgid "Disable automatic tag following"
 msgstr "Désactiver le suivi automatique des étiquettes"
 
+msgid "Disable automatic update check"
+msgstr ""
+
 msgid "Disable autorefresh of the repository"
 msgstr ""
 
@@ -16589,6 +16616,9 @@ msgstr ""
 
 msgid "Disable color"
 msgstr "Désactiver la couleur"
+
+msgid "Disable color in output"
+msgstr ""
 
 msgid "Disable color in output messages"
 msgstr ""
@@ -17684,6 +17714,9 @@ msgstr ""
 
 msgid "Display actions without running"
 msgstr "Exécution à blanc : afficher les actions sans les exécuter"
+
+msgid "Display active subdomains only"
+msgstr ""
 
 msgid "Display all MIB variables"
 msgstr ""
@@ -21412,6 +21445,9 @@ msgid "Domain type"
 msgstr ""
 
 msgid "Domain vcpu counts"
+msgstr ""
+
+msgid "Domains to find subdomains for"
 msgstr ""
 
 msgid "Don"
@@ -25692,6 +25728,9 @@ msgstr ""
 msgid "Exclude GLOB matches"
 msgstr ""
 
+msgid "Exclude IPs from the list of domains"
+msgstr ""
+
 msgid "Exclude Linux pseudo filesystems"
 msgstr ""
 
@@ -26784,6 +26823,12 @@ msgstr "Fichier et décalage d’octets de l’identifiant à renommer"
 msgid "File as input"
 msgstr "Fichier d’entrée"
 
+msgid "File containing list of domains"
+msgstr ""
+
+msgid "File containing list of resolvers"
+msgstr ""
+
 msgid "File describing cross compilation environment"
 msgstr ""
 
@@ -26926,6 +26971,9 @@ msgid "File to write backup data to"
 msgstr "Fichier dans lequel écrire la sauvegarde"
 
 msgid "File to write output file dependencies"
+msgstr ""
+
+msgid "File to write output to"
 msgstr ""
 
 msgid "File uses specified units of space"
@@ -27521,6 +27569,9 @@ msgstr ""
 
 msgid "Fixup commit to be used with rebase --autosquash"
 msgstr "Préparer la validation à utiliser avec rebase --autosquash"
+
+msgid "Flag config file"
+msgstr ""
 
 msgid "Flag explicitly informs tmux that UTF-8 is supported"
 msgstr "Présumer du support UTF-8 par le terminal"
@@ -28331,6 +28382,9 @@ msgstr ""
 
 msgid "Force the rebase"
 msgstr "Forcer le rebasage"
+
+msgid "Force the removal"
+msgstr ""
 
 msgid "Force the solver to find a solution (even an aggressive one)"
 msgstr ""
@@ -30006,6 +30060,12 @@ msgstr "Obtenir une valeur de configuration"
 msgid "Get current brightness of device"
 msgstr ""
 
+msgid "Get current input method group name"
+msgstr ""
+
+msgid "Get current input method name"
+msgstr ""
+
 msgid "Get dataset space consumed by each user"
 msgstr "Obtenir l’espace du jeu de données utilisé par chaque utilisateur"
 
@@ -30674,6 +30734,9 @@ msgstr "Port HTTP pour l’interface de fossil"
 
 msgid "HTTP proxy URL"
 msgstr "URL du proxy HTTP"
+
+msgid "HTTP proxy to use"
+msgstr ""
 
 msgid "HTTP request size limit"
 msgstr "Taille maximale de requête HTTP"
@@ -32079,6 +32142,9 @@ msgstr ""
 msgid "In-memory cache SIZE for dir objects"
 msgstr ""
 
+msgid "Inactivate input method"
+msgstr ""
+
 msgid "Include -git/-svn/etc packages"
 msgstr "Inclure les paquets -git, -svn…"
 
@@ -32241,6 +32307,9 @@ msgstr ""
 msgid "Include all sources (including path and git)"
 msgstr "Inclure toutes les sources (y compris locales et git)"
 
+msgid "Include all sources in the output (-json only)"
+msgstr ""
+
 msgid "Include archives"
 msgstr ""
 
@@ -32356,6 +32425,9 @@ msgid "Include high-level source"
 msgstr "Inclure les sources de haut niveau"
 
 msgid "Include hooks"
+msgstr ""
+
+msgid "Include host IP in output (-active only)"
 msgstr ""
 
 msgid "Include index for symbols from archive members"
@@ -34482,6 +34554,9 @@ msgstr ""
 msgid "Limit the number of results (default: 10, max: 100)"
 msgstr ""
 
+msgid "Limit the number of results per source"
+msgstr ""
+
 msgid "Limit the number of results shown. Default is 50"
 msgstr ""
 
@@ -34805,6 +34880,9 @@ msgstr ""
 
 msgid "List all available services"
 msgstr "Lister tous les services disponibles"
+
+msgid "List all available sources"
+msgstr ""
 
 msgid "List all available tags"
 msgstr ""
@@ -38532,6 +38610,9 @@ msgstr ""
 msgid "Max objects per response"
 msgstr ""
 
+msgid "Max response body size to read (bytes)"
+msgstr ""
+
 msgid "Max scroll window"
 msgstr "Taille maximale du changement d’écran"
 
@@ -38548,6 +38629,12 @@ msgid "Maximize window"
 msgstr ""
 
 msgid "Maximum AGE for index in cache before refresh"
+msgstr ""
+
+msgid "Maximum HTTP requests per second (global)"
+msgstr ""
+
+msgid "Maximum HTTP requests per second for providers (key=value)"
 msgstr ""
 
 msgid "Maximum age (in seconds) for assets"
@@ -38887,6 +38974,9 @@ msgid "Minimum-stability allowed (unless a version is specified)"
 msgstr ""
 
 msgid "Minor number of array device"
+msgstr ""
+
+msgid "Minutes to wait for enumeration results"
 msgstr ""
 
 msgid "Mirror an exploit to current directory"
@@ -40009,6 +40099,9 @@ msgid "Number of components to strip from paths"
 msgstr ""
 
 msgid "Number of compression threads for multithread compression"
+msgstr ""
+
+msgid "Number of concurrent goroutines for resolving (-active only)"
 msgstr ""
 
 msgid "Number of concurrent jobs (no argument means no limit)"
@@ -45186,6 +45279,9 @@ msgstr "Afficher les droits d’auteur et la version"
 msgid "Print copyright and version information"
 msgstr "Afficher les droits d’auteur et les informations de version"
 
+msgid "Print corresponding addon name for im"
+msgstr ""
+
 msgid "Print current RTC performance parameters"
 msgstr ""
 
@@ -45370,6 +45466,9 @@ msgid "Print extra information"
 msgstr ""
 
 msgid "Print family description of helper"
+msgstr ""
+
+msgid "Print fcitx's dbus address"
 msgstr ""
 
 msgid "Print file size, not disk usage"
@@ -47994,6 +48093,9 @@ msgstr ""
 msgid "Provided shared libraries, separated by whitespace"
 msgstr ""
 
+msgid "Provider config file"
+msgstr ""
+
 msgid "Provides a detailed information about the database schema"
 msgstr ""
 
@@ -49869,6 +49971,9 @@ msgstr "Recharger la configuration du service"
 msgid "Reload a frozen state from FILE at start"
 msgstr ""
 
+msgid "Reload config"
+msgstr ""
+
 msgid "Reload config and rebind specified interface"
 msgstr "Recharger la configuration et se rattacher à l’interface spécifiée"
 
@@ -51513,6 +51618,9 @@ msgstr ""
 msgid "Report size in bytes"
 msgstr ""
 
+msgid "Report source statistics"
+msgstr ""
+
 msgid "Report specific warnings as errors"
 msgstr ""
 
@@ -51616,6 +51724,12 @@ msgid "Request distinct server name"
 msgstr ""
 
 msgid "Request dry-run of dinstall after upload"
+msgstr ""
+
+msgid "Request fcitx to exit"
+msgstr ""
+
+msgid "Request fcitx to open a new X11 connection with $DISPLAY"
 msgstr ""
 
 msgid "Request given address in DHCP DISCOVER message"
@@ -54921,6 +55035,9 @@ msgstr ""
 msgid "Seconds to wait before reconnecting"
 msgstr ""
 
+msgid "Seconds to wait before timing out"
+msgstr ""
+
 msgid "Seconds to wait between updates"
 msgstr "Intervalle en secondes entre les mises à jour"
 
@@ -56389,6 +56506,9 @@ msgid "Set copyright holder in output"
 msgstr "Paramétrer le détenteur des droits d’auteurs pour la sortie"
 
 msgid "Set cpu idle state specific kernel options"
+msgstr ""
+
+msgid "Set current input method group"
 msgstr ""
 
 msgid "Set daemon connection timeout in seconds"
@@ -60375,6 +60495,9 @@ msgstr ""
 msgid "Show only properties by this name"
 msgstr ""
 
+msgid "Show only subdomains"
+msgstr ""
+
 msgid "Show only the names of files that contain matches"
 msgstr ""
 
@@ -62733,6 +62856,9 @@ msgstr ""
 msgid "Source-only mode"
 msgstr ""
 
+msgid "Sources to exclude from enumeration"
+msgstr ""
+
 msgid "Space or comma separated list of features to activate"
 msgstr ""
 
@@ -62758,6 +62884,9 @@ msgid "Specific path to potfile"
 msgstr ""
 
 msgid "Specific path to restore file"
+msgstr ""
+
+msgid "Specific sources to use for discovery"
 msgstr ""
 
 msgid "Specifics of npm's package.json handling"
@@ -66051,6 +66180,12 @@ msgstr ""
 msgid "Subdirectory of the new target"
 msgstr ""
 
+msgid "Subdomains to filter"
+msgstr ""
+
+msgid "Subdomains to match"
+msgstr ""
+
 msgid "Subdriver of disk device"
 msgstr ""
 
@@ -66507,6 +66642,9 @@ msgstr ""
 msgid "Swirl image pixels about the center [degrees]"
 msgstr ""
 
+msgid "Switch Active/Inactive"
+msgstr ""
+
 msgid "Switch between accounts."
 msgstr ""
 
@@ -66568,6 +66706,9 @@ msgid "Switch to post-copy after timeout"
 msgstr ""
 
 msgid "Switch to the given network profile"
+msgstr ""
+
+msgid "Switch to the input method"
 msgstr ""
 
 msgid "Switches bundler's defaults into deployment mode."
@@ -69924,6 +70065,9 @@ msgstr ""
 msgid "Update subarray"
 msgstr ""
 
+msgid "Update subfinder to latest version"
+msgstr ""
+
 msgid "Update superblock properties"
 msgstr ""
 
@@ -70983,6 +71127,9 @@ msgstr "Utiliser les 8 accumulateurs de média"
 msgid "Use all local caches"
 msgstr ""
 
+msgid "Use all sources for enumeration (slow)"
+msgstr ""
+
 msgid "Use all tags, not just annotated"
 msgstr ""
 
@@ -71734,6 +71881,9 @@ msgid "Use only a given repository"
 msgstr "Utiliser seulement un dépôt spécifié"
 
 msgid "Use only paramiko, no openssh"
+msgstr ""
+
+msgid "Use only sources that can handle subdomains recursively"
 msgstr ""
 
 msgid "Use only specified device size (ignore rest of device) DANGEROUS!"
@@ -74386,6 +74536,9 @@ msgid "Write out the current configuration"
 msgstr "Afficher la configuration actuelle"
 
 msgid "Write output back to the same file instead of stdout"
+msgstr ""
+
+msgid "Write output in JSONL format"
 msgstr ""
 
 msgid "Write output to <file> instead of stdout"

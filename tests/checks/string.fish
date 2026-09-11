@@ -4,22 +4,22 @@
 string
 # CHECKERR: string: missing subcommand
 # CHECKERR: {{.*}}checks/string.fish (line {{\d+}}):
-# CHECKERR: string
-# CHECKERR: ^
+# CHECKERR: {{^}}string
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help string' for related documentation)
 
 string abc
 # CHECKERR: string abc: invalid subcommand
 # CHECKERR: {{.*}}checks/string.fish (line {{\d+}}):
-# CHECKERR: string abc
-# CHECKERR: ^
+# CHECKERR: {{^}}string abc
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help string' for related documentation)
 
 string --abc
 # CHECKERR: string --abc: invalid subcommand
 # CHECKERR: {{.*}}checks/string.fish (line {{\d+}}):
-# CHECKERR: string --abc
-# CHECKERR: ^
+# CHECKERR: {{^}}string --abc
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help string' for related documentation)
 
 string match -r -v "c.*" dog can cat diz; and echo "exit 0"
@@ -164,7 +164,9 @@ string pad -c ab -w4 .
 
 # nonprintable characters does not make sense
 string pad -c \u07 .
-# CHECKERR: string pad: Invalid padding character of width zero {{'\a'}}
+# CHECKERR: string pad: Invalid padding character of width zero '\x07'
+string pad -c \u200b .
+# CHECKERR: string pad: Invalid padding character of width zero '\u200B'
 
 string pad --width=-1 foo
 # CHECKERR: string pad: Invalid width value '-1'
@@ -1005,8 +1007,8 @@ function string
     builtin string $argv
 end
 # CHECKERR: {{.*}}checks/string.fish (line {{\d+}}): function: string: cannot use reserved keyword as function name
-# CHECKERR: function string
-# CHECKERR: ^~~~~~~~~~~~~~^
+# CHECKERR: {{^}}function string
+# CHECKERR: {{^}}^~~~~~~~~~~~~~^
 
 string escape \x7F
 # CHECK: \x7f
@@ -1319,8 +1321,8 @@ string replace -r o '${bad_name}' foobar
 string match --unknown-opt
 # CHECKERR: string match: --unknown-opt: unknown option
 # CHECKERR: {{.*}}checks/string.fish (line {{\d+}}):
-# CHECKERR: string match --unknown-opt
-# CHECKERR: ^
+# CHECKERR: {{^}}string match --unknown-opt
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help string' for related documentation)
 
 string match --regex=abc

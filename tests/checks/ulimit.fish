@@ -10,8 +10,8 @@ ulimit 4352353252352352334
 #CHECKERR: ulimit: Invalid limit '4352353252352352334'
 #CHECKERR:
 #CHECKERR: {{.*}}checks/ulimit.fish (line {{\d+}}):
-#CHECKERR: ulimit 4352353252352352334
-#CHECKERR: ^
+#CHECKERR: {{^}}ulimit 4352353252352352334
+#CHECKERR: {{^}}^
 #CHECKERR: (Type 'help ulimit' for related documentation)
 
 # Try to increase a hard limit
@@ -68,20 +68,20 @@ else
 end
 #CHECKERR: ulimit: Resource limit not available on this operating system
 #CHECKERR: {{.*}}checks/ulimit.fish (line {{\d+}}):
-#CHECKERR: ulimit -{{.}} 1024
-#CHECKERR: ^
+#CHECKERR: {{^}}    ulimit -{{.}} 1024
+#CHECKERR: {{^}}    ^
 #CHECKERR: (Type 'help ulimit' for related documentation)
 
 ulimit --core-size 0 1 2
 #CHECKERR: ulimit: too many arguments
 #CHECKERR: {{.*}}checks/ulimit.fish (line {{\d+}}):
-#CHECKERR: ulimit --core-size 0 1 2
-#CHECKERR: ^
+#CHECKERR: {{^}}ulimit --core-size 0 1 2
+#CHECKERR: {{^}}^
 #CHECKERR: (Type 'help ulimit' for related documentation)
 
 ulimit --core-size abc
 #CHECKERR: ulimit: Invalid limit 'abc'
 #CHECKERR: {{.*}}checks/ulimit.fish (line {{\d+}}):
-#CHECKERR: ulimit --core-size abc
-#CHECKERR: ^
+#CHECKERR: {{^}}ulimit --core-size abc
+#CHECKERR: {{^}}^
 #CHECKERR: (Type 'help ulimit' for related documentation)

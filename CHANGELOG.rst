@@ -3,20 +3,57 @@ fish ?.?.? (released ???)
 
 Interactive improvements
 ------------------------
+- Completion options `--no-files` and `--force-files` on a wrapping command now take precedence over such options on the commands it wraps.
+
+Regression fixes:
+-----------------
+- (From 4.0.0) Short options are no longer offered as completions if an old-style completion matches (like `-foo`).
+
+fish 4.9.3 (released September 08, 2026)
+========================================
+
+This release fixes another macOS issue where dead keys, for example the two-key sequence :kbd:`",space` on the US International keyboard layout would incorrectly insert space (:issue:`12979`).
+
+fish 4.9.2 (released September 05, 2026)
+========================================
+
+This release corrects the fix for macOS terminals from 4.9.1 (:issue:`12973`)
+
+fish 4.9.1 (released September 04, 2026)
+========================================
+
+This release fixes the following problems identified in fish 4.9.0:
+
+- On non-default keyboard layouts, fish executed bindings for physical keys instead of only bindings for the layout's key.
+  For example, on the Dvorak layout, typing :kbd:`s` would insert ``;`` because there is a default binding for :kbd:`;` (:issue:`12968`).
+- When typing :kbd:`space` to accept a character entered via certain IMEs, fish would insert a space instead of the desired character, which has been fixed (:issue:`12974`).
+- On macOS terminals, keys like :kbd:`option-l` would execute bindings for :kbd:`alt-l` instead of the historical behavior of inserting a character (like ``@`` on a German layout) (:issue:`12973`).
+
+fish 4.9.0 (released September 03, 2026)
+========================================
+
+Interactive improvements
+------------------------
+- To mitigate issues in Konsole version v26.07.80's implementation of the kitty keyboard protocol, fish no longer requests that protocol on Konsole.
+  The ``omit-term-workarounds`` :ref:`feature flag <featureflags>` can be turned on to enable the kitty keyboard protocol on Konsole again (:issue:`12948`).
 - On some terminals like kitty, keys like :kbd:`shift-space` and :kbd:`space` can now be mapped independently (:issue:`12898`).
-- Fix slow tab completion in directories that contain slow-to-resolve symlinks (e.g. links targeting a network mount) (:issue:`12905`).
-- To mitigate issues in Konsole v26.07.80's initial implementation of the kitty keyboard protocol, fish no longer requests that protocol on Konsole.
-  The ``omit-term-workarounds`` :ref:`feature flag <featureflags>` can be enabled to enable the kitty keyboard protocol on Konsole again (:issue:`12948`).
+- Fixed slow tab completion in directories that contain slow-to-resolve symlinks (e.g. links to network-mounted files) (:issue:`12905`).
+- Abbreviations can now be given a description, which will be displayed in the completion pager (:issue:`11291`).
+- Vi mode commands like ``cF`` and ``cT`` now work correctly (:issue:`12947`).
 
 Scripting improvements
 ----------------------
 - List indexing can now be nested in more cases; for example ``$foo[$bar[1] 2]`` is now allowed (:issue:`12903`).
+- Escaped square brackets (e.g. ``\133`` for ``[``) are no longer considered a slicing operator (:issue:`7969`).
+- Variables containing a closing square brackets and used to index into another variable will no longer close the slice early (:issue:`12819`).
 - Builtin help pages now respect an override of the ``man`` function (:issue:`12886`).
 - Commands like ``status=123 echo $status`` now throw an error instead of silently ignore the variable override (:issue:`7790`).
 
 Regression fixes:
 -----------------
-- (From 4.6.0) Chinese and Japanese translation of error messages owned by the C library (:issue:`12895`).
+- (From 4.6.0) Chinese and Japanese translation of error messages owned by the C library were broken (:issue:`12895`).
+- (From 4.3.2) Erasing read-only variables with ``set --erase`` was accidentally allowed.
+- (From 4.0.0) Builtin ``fg`` was not working on NetBSD (:issue:`12929`).
 
 fish 4.8.1 (released July 14, 2026)
 ===================================

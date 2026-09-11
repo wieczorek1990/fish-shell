@@ -23,15 +23,15 @@ eval "("
 echo $status
 # CHECK: 123
 # CHECKERR: {{.*}}checks/eval.fish (line {{\d+}}): Unexpected end of string, expecting ')'
-# CHECKERR: (
-# CHECKERR: ^
+# CHECKERR: {{^}}(
+# CHECKERR: {{^}}^
 false
 eval '""'
 echo $status
 # CHECK: 123
 # CHECKERR: {{.*}}checks/eval.fish (line {{\d+}}): The expanded command was empty.
-# CHECKERR: ""
-# CHECKERR: ^^
+# CHECKERR: {{^}}""
+# CHECKERR: {{^}}^^
 
 function empty
 end
@@ -66,8 +66,8 @@ function eval
     builtin eval $argv
 end
 # CHECKERR: {{.*}}checks/eval.fish (line {{\d+}}): function: eval: cannot use reserved keyword as function name
-# CHECKERR: function eval
-# CHECKERR: ^~~~~~~~~~~~^
+# CHECKERR: {{^}}function eval
+# CHECKERR: {{^}}^~~~~~~~~~~~^
 
 
 function evil --no-scope-shadowing

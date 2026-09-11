@@ -150,22 +150,22 @@ functions -Dv t2
 functions -c first
 # CHECKERR: functions: Expected exactly two names (current function name, and new function name)
 # CHECKERR: {{.*}}/checks/functions.fish (line {{\d+}}):
-# CHECKERR: functions -c first
-# CHECKERR: ^
+# CHECKERR: {{^}}functions -c first
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help functions' for related documentation)
 
 functions -c first second third
 # CHECKERR: functions: Expected exactly two names (current function name, and new function name)
 # CHECKERR: {{.*}}/checks/functions.fish (line {{\d+}}):
-# CHECKERR: functions -c first second third
-# CHECKERR: ^
+# CHECKERR: {{^}}functions -c first second third
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help functions' for related documentation)
 
 functions -c unknown_function copy
 # CHECKERR: functions: Function 'unknown_function' does not exist
 # CHECKERR: {{.*}}/checks/functions.fish (line {{\d+}}):
-# CHECKERR: functions -c unknown_function copy
-# CHECKERR: ^
+# CHECKERR: {{^}}functions -c unknown_function copy
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help functions' for related documentation)
 
 function to_copy
@@ -173,22 +173,22 @@ end
 functions -c -- to_copy -invalid_name
 # CHECKERR: functions: Illegal function name '-invalid_name'
 # CHECKERR: {{.*}}/checks/functions.fish (line {{\d+}}):
-# CHECKERR: functions -c -- to_copy -invalid_name
-# CHECKERR: ^
+# CHECKERR: {{^}}functions -c -- to_copy -invalid_name
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help functions' for related documentation)
 
 functions -c -- to_copy function
 # CHECKERR: functions: Illegal function name 'function'
 # CHECKERR: {{.*}}/checks/functions.fish (line {{\d+}}):
-# CHECKERR: functions -c -- to_copy function
-# CHECKERR: ^
+# CHECKERR: {{^}}functions -c -- to_copy function
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help functions' for related documentation)
 
 functions -c -- to_copy to_copy
 # CHECKERR: functions: Function 'to_copy' already exists. Cannot create copy of 'to_copy'
 # CHECKERR: {{.*}}/checks/functions.fish (line {{\d+}}):
-# CHECKERR: functions -c -- to_copy to_copy
-# CHECKERR: ^
+# CHECKERR: {{^}}functions -c -- to_copy to_copy
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help functions' for related documentation)
 
 echo "functions -c t t3" | source
@@ -215,8 +215,8 @@ functions --no-details --details t
 # CHECKERR: functions: invalid option combination
 # CHECKERR:
 # CHECKERR: {{.*}}checks/functions.fish (line {{\d+}}):
-# CHECKERR: functions --no-details --details t
-# CHECKERR: ^
+# CHECKERR: {{^}}functions --no-details --details t
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help functions' for related documentation)
 # XXX FIXME ^ caret should point at --no-details --details
 
@@ -253,8 +253,8 @@ functions --names -a | string match __fish_config_interactive
 functions --description ""
 # CHECKERR: functions: Expected exactly one function name
 # CHECKERR: {{.*}}checks/functions.fish (line {{\d+}}):
-# CHECKERR: functions --description ""
-# CHECKERR: ^
+# CHECKERR: {{^}}functions --description ""
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help functions' for related documentation)
 
 function foo --on-variable foo
@@ -308,13 +308,13 @@ string escape (functions --no-details --color=always test_color_option)
 functions --names --query
 # CHECKERR: functions: invalid option combination
 # CHECKERR: {{.*}}/checks/functions.fish (line {{\d+}}):
-# CHECKERR: functions --names --query
-# CHECKERR: ^
+# CHECKERR: {{^}}functions --names --query
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help functions' for related documentation)
 
 functions -d desc unknown_function
 # CHECKERR: functions: Function 'unknown_function' does not exist
 # CHECKERR: {{.*}}/checks/functions.fish (line {{\d+}}):
-# CHECKERR: functions -d desc unknown_function
-# CHECKERR: ^
+# CHECKERR: {{^}}functions -d desc unknown_function
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help functions' for related documentation)

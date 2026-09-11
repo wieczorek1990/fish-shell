@@ -1,10 +1,10 @@
-use bitflags::bitflags;
 use fish_feature_flags::{FeatureFlag, feature_test};
 use fish_widestring::{
     ANY_CHAR, ANY_STRING, ANY_STRING_RECURSIVE, ASCII_MAX, BRACE_BEGIN, BRACE_END, BRACE_SEP,
     BRACE_SPACE, BYTE_MAX, HOME_DIRECTORY, INTERNAL_SEPARATOR, L, PROCESS_EXPAND_SELF,
-    PROCESS_EXPAND_SELF_STR, UCS2_MAX, VARIABLE_EXPAND, VARIABLE_EXPAND_SINGLE, WExt as _, WString,
-    bytes2wcstring, decode_byte_from_char, fish_reserved_codepoint, wcs2bytes, wstr,
+    PROCESS_EXPAND_SELF_STR, SLICE_BEGIN, SLICE_END, UCS2_MAX, VARIABLE_EXPAND,
+    VARIABLE_EXPAND_SINGLE, WExt as _, WString, bytes2wcstring, decode_byte_from_char,
+    fish_reserved_codepoint, wcs2bytes, wstr,
 };
 use libc::{SIG_IGN, SIGTTOU, STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use nix::unistd;
@@ -32,7 +32,7 @@ pub const STDERR_FD: BorrowedFd = unsafe { BorrowedFd::borrow_raw(STDERR_FILENO)
 
 pub const PACKAGE_NAME: &str = env!("CARGO_PKG_NAME");
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum EscapeStringStyle {
     Script(EscapeFlags),
     Url,
@@ -60,27 +60,25 @@ impl TryFrom<&wstr> for EscapeStringStyle {
     }
 }
 
-bitflags! {
-    /// Flags for the [`escape_string()`] function. These are only applicable when the escape style is
-    /// [`EscapeStringStyle::Script`].
-    #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
-    pub struct EscapeFlags: u32 {
-        /// Do not escape special fish syntax characters like the semicolon. Only escape non-printable
-        /// characters and backslashes.
-        const NO_PRINTABLES = 1 << 0;
-        /// Do not try to use 'simplified' quoted escapes, and do not use empty quotes as the empty
-        /// string.
-        const NO_QUOTED = 1 << 1;
-        /// Do not escape tildes.
-        const NO_TILDE = 1 << 2;
-        /// Replace non-printable control characters with Unicode symbols.
-        const SYMBOLIC = 1 << 3;
-        /// Escape ,
-        const COMMA = 1 << 4;
-    }
+/// Options for the [`escape_string()`] function. These are only applicable when the escape style is
+/// [`EscapeStringStyle::Script`].
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
+pub struct EscapeFlags {
+    /// Do not escape special fish syntax characters like the semicolon. Only escape non-printable
+    /// characters and backslashes.
+    pub no_printables: bool,
+    /// Do not try to use 'simplified' quoted escapes, and do not use empty quotes as the empty
+    /// string.
+    pub no_quoted: bool,
+    /// Do not escape tildes.
+    pub no_tilde: bool,
+    /// Replace non-printable control characters with Unicode symbols.
+    pub symbolic: bool,
+    /// Escape commas.
+    pub comma: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum UnescapeStringStyle {
     Script(UnescapeFlags),
     Url,
@@ -106,17 +104,15 @@ impl TryFrom<&wstr> for UnescapeStringStyle {
     }
 }
 
-bitflags! {
-    /// Flags for unescape_string functions.
-    #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
-    pub struct UnescapeFlags: u32 {
-        /// escape special fish syntax characters like the semicolon
-        const SPECIAL = 1 << 0;
-        /// allow incomplete escape sequences
-        const INCOMPLETE = 1 << 1;
-        /// don't handle backslash escapes
-        const NO_BACKSLASHES = 1 << 2;
-    }
+/// Options for unescape_string functions.
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
+pub struct UnescapeFlags {
+    /// Escape special fish syntax characters like the semicolon.
+    pub special: bool,
+    /// Allow incomplete escape sequences.
+    pub incomplete: bool,
+    /// Don't handle backslash escapes.
+    pub no_backslashes: bool,
 }
 /// Replace special characters with backslash escape sequences. Newline is replaced with `\n`, etc.
 pub fn escape(s: &wstr) -> WString {
@@ -135,12 +131,12 @@ pub fn escape_string(s: &wstr, style: EscapeStringStyle) -> WString {
 
 /// Escape a string in a fashion suitable for using in fish script.
 fn escape_string_script(input: &wstr, flags: EscapeFlags) -> WString {
-    let escape_printables = !flags.contains(EscapeFlags::NO_PRINTABLES);
-    let escape_comma = flags.contains(EscapeFlags::COMMA);
-    let no_quoted = flags.contains(EscapeFlags::NO_QUOTED);
-    let no_tilde = flags.contains(EscapeFlags::NO_TILDE);
+    let escape_printables = !flags.no_printables;
+    let escape_comma = flags.comma;
+    let no_quoted = flags.no_quoted;
+    let no_tilde = flags.no_tilde;
     let no_qmark = feature_test(FeatureFlag::QuestionMarkNoGlob);
-    let symbolic = flags.contains(EscapeFlags::SYMBOLIC);
+    let symbolic = flags.symbolic;
 
     assert!(
         !symbolic || !escape_printables,
@@ -317,7 +313,7 @@ fn escape_string_script(input: &wstr, flags: EscapeFlags) -> WString {
         out.push_utfstr(&escape_string_with_quote(
             input,
             Some(quote),
-            EscapeFlags::empty(),
+            EscapeFlags::default(),
         ));
         out.push(quote);
     }
@@ -511,9 +507,9 @@ fn unescape_string_internal(input: &wstr, flags: UnescapeFlags) -> Option<WStrin
     let mut result = WString::new();
     result.reserve(input.len());
 
-    let unescape_special = flags.contains(UnescapeFlags::SPECIAL);
-    let allow_incomplete = flags.contains(UnescapeFlags::INCOMPLETE);
-    let ignore_backslashes = flags.contains(UnescapeFlags::NO_BACKSLASHES);
+    let unescape_special = flags.special;
+    let allow_incomplete = flags.incomplete;
+    let ignore_backslashes = flags.no_backslashes;
     let allow_percent_self = !feature_test(FeatureFlag::RemovePercentSelf);
 
     // The positions of open braces.
@@ -525,7 +521,7 @@ fn unescape_string_internal(input: &wstr, flags: UnescapeFlags) -> Option<WStrin
     let mut potential_word_start = None;
 
     let mut errored = false;
-    #[derive(PartialEq, Eq)]
+    #[derive(PartialEq)]
     enum Mode {
         Unquoted,
         SingleQuotes,
@@ -543,7 +539,7 @@ fn unescape_string_internal(input: &wstr, flags: UnescapeFlags) -> Option<WStrin
                 '\\' if !ignore_backslashes => {
                     // Backslashes (escapes) are complicated and may result in errors, or
                     // appending INTERNAL_SEPARATORs, so we have to handle them specially.
-                    if let Some(escape_chars) = read_unquoted_escape(
+                    if let Some(escape_chars) = unescape_one(
                         &input[input_position..],
                         &mut result,
                         allow_incomplete,
@@ -636,6 +632,12 @@ fn unescape_string_internal(input: &wstr, flags: UnescapeFlags) -> Option<WStrin
                             }
                         }
                     }
+                }
+                '[' if unescape_special => {
+                    to_append_or_none = Some(SLICE_BEGIN);
+                }
+                ']' if unescape_special => {
+                    to_append_or_none = Some(SLICE_END);
                 }
                 ',' if unescape_special && brace_count > 0 => {
                     to_append_or_none = Some(BRACE_SEP);
@@ -733,6 +735,12 @@ fn unescape_string_internal(input: &wstr, flags: UnescapeFlags) -> Option<WStrin
                     to_append_or_none = Some(VARIABLE_EXPAND_SINGLE);
                     vars_or_seps.push(input_position);
                 }
+                '[' if unescape_special => {
+                    to_append_or_none = Some(SLICE_BEGIN);
+                }
+                ']' if unescape_special => {
+                    to_append_or_none = Some(SLICE_END);
+                }
                 _ => (),
             }
         }
@@ -827,7 +835,7 @@ fn unescape_string_var(input: &wstr) -> Option<WString> {
 
 /// Given a string starting with a backslash, read the escape as if it is unquoted, appending
 /// to result. Return the number of characters consumed, or none on error.
-pub fn read_unquoted_escape(
+pub fn unescape_one(
     input: &wstr,
     result: &mut WString,
     allow_incomplete: bool,
@@ -940,12 +948,14 @@ pub fn read_unquoted_escape(
             'c' => {
                 let sequence_char = u32::from(input.char_at(in_pos));
                 in_pos += 1;
-                if sequence_char >= u32::from('a') && sequence_char <= u32::from('a') + 32 {
-                    result_char_or_none =
-                        Some(char::from_u32(sequence_char - u32::from('a') + 1).unwrap());
-                } else if sequence_char >= u32::from('A') && sequence_char <= u32::from('A') + 32 {
-                    result_char_or_none =
-                        Some(char::from_u32(sequence_char - u32::from('A') + 1).unwrap());
+                // Range covers:
+                //   @ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_
+                //   `abcdefghijklmnopqrstuvwxyz{|}~
+                // `\c<0x7f>` (lowercase version of `\c_`) is not supported since
+                // `0x7f` a control character to begin with.
+                if (u32::from('@')..0x7f).contains(&sequence_char) {
+                    let ctrl = char::from_u32(sequence_char % 32).unwrap();
+                    result_char_or_none = Some(ctrl);
                 } else {
                     errored = true;
                 }
@@ -1546,5 +1556,34 @@ mod tests {
         assert_eq!(truncate_at_nul(L!("abc\0def")), L!("abc"));
         assert_eq!(truncate_at_nul(L!("abc")), L!("abc"));
         assert_eq!(truncate_at_nul(L!("\0abc")), L!(""));
+    }
+
+    mod unescape_one {
+        use super::*;
+
+        fn test_good(escaped: &wstr, expected: &wstr) {
+            let mut unesc = WString::new();
+            let r = unescape_one(escaped, &mut unesc, false, false);
+            assert_eq!(r, Some(escaped.len()));
+            assert_eq!(unesc, expected, "{escaped} -> {:?}", unesc);
+        }
+
+        fn test_bad(escaped: &wstr) {
+            let mut unesc = WString::new();
+            let r = unescape_one(escaped, &mut unesc, false, false);
+            assert_eq!(r, None, "{escaped} -> {:?}", unesc);
+        }
+
+        #[test]
+        fn control() {
+            test_bad(L!("\\c?"));
+            test_good(L!("\\c@"), L!("\x00"));
+            test_good(L!("\\cA"), L!("\x01"));
+            test_good(L!("\\c_"), L!("\x1f"));
+            test_good(L!("\\c`"), L!("\x00"));
+            test_good(L!("\\ca"), L!("\x01"));
+            test_bad(L!("\\c\x7f"));
+            test_bad(L!("\\c\u{0080}"));
+        }
     }
 }

@@ -448,8 +448,8 @@ path basename --quiet=foo
 path basename --unknown-option
 # CHECKERR: path basename: --unknown-option: unknown option
 # CHECKERR: {{.*}}/checks/path.fish (line {{\d+}}):
-# CHECKERR: path basename --unknown-option
-# CHECKERR: ^
+# CHECKERR: {{^}}path basename --unknown-option
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help path' for related documentation)
 
 path filter -t invalid_type
@@ -461,8 +461,8 @@ path filter -p 999
 path sort --relative
 # CHECKERR: path sort: --relative: unknown option
 # CHECKERR: {{.*}}/checks/path.fish (line {{\d+}}):
-# CHECKERR: path sort --relative
-# CHECKERR: ^
+# CHECKERR: {{^}}path sort --relative
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help path' for related documentation)
 
 path change-extension
@@ -477,13 +477,13 @@ path sort --key=invalid-key
 path
 # CHECKERR: path: missing subcommand
 # CHECKERR: {{.*}}/checks/path.fish (line {{\d+}}):
-# CHECKERR: path
-# CHECKERR: ^
+# CHECKERR: {{^}}path
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help path' for related documentation)
 
 path invalid-subcmd
 # CHECKERR: path invalid-subcmd: invalid subcommand
 # CHECKERR: {{.*}}/checks/path.fish (line {{\d+}}):
-# CHECKERR: path invalid-subcmd
-# CHECKERR: ^
+# CHECKERR: {{^}}path invalid-subcmd
+# CHECKERR: {{^}}^
 # CHECKERR: (Type 'help path' for related documentation)

@@ -569,35 +569,35 @@ echo (#"
 # Make sure we don't match up brackets within comments (#8022).
 $fish -c 'echo f[oo # not valid, no matching ]'
 # CHECKERR: fish: Unexpected end of string, square brackets do not match
-# CHECKERR: echo f[oo # not valid, no matching ]
-# CHECKERR: {{      }}^
+# CHECKERR: {{^}}echo f[oo # not valid, no matching ]
+# CHECKERR: {{^}}      ^
 
 # Should fail because $PWD is read-only.
 for PWD in foo bar
     true
 end
 # CHECKERR: {{.*}}/basic.fish (line {{\d+}}): for: PWD: cannot overwrite read-only variable
-# CHECKERR: for PWD in foo bar
-# CHECKERR:     ^~^
+# CHECKERR: {{^}}for PWD in foo bar
+# CHECKERR: {{^}}    ^~^
 # XXX FIXME carat should point at PWD
 
 $fish -c 'echo \xtest'
 # CHECKERR: fish: Invalid token '\xtest'
-# CHECKERR: echo \xtest
-# CHECKERR:      ^~~~~^
+# CHECKERR: {{^}}echo \xtest
+# CHECKERR: {{^}}     ^~~~~^
 
 $fish -c 'echo \utest'
 # CHECKERR: fish: Invalid token '\utest'
-# CHECKERR: echo \utest
-# CHECKERR:      ^~~~~^
+# CHECKERR: {{^}}echo \utest
+# CHECKERR: {{^}}     ^~~~~^
 
 echo $status
 # CHECK: 127
 
 $fish -c 'echo \c'
 # CHECKERR: fish: Incomplete escape sequence '\c'
-# CHECKERR: echo \c
-# CHECKERR:      ^^
+# CHECKERR: {{^}}echo \c
+# CHECKERR: {{^}}     ^^
 
 echo $status
 # CHECK: 127
@@ -609,32 +609,32 @@ echo $status
 
 $fish -c 'echo \U'
 # CHECKERR: fish: Incomplete escape sequence '\U'
-# CHECKERR: echo \U
-# CHECKERR:      ^^
+# CHECKERR: {{^}}echo \U
+# CHECKERR: {{^}}     ^^
 
 echo $status
 # CHECK: 127
 
 $fish -c 'echo \x'
 # CHECKERR: fish: Incomplete escape sequence '\x'
-# CHECKERR: echo \x
-# CHECKERR:      ^^
+# CHECKERR: {{^}}echo \x
+# CHECKERR: {{^}}     ^^
 
 echo $status
 # CHECK: 127
 
 $fish -c begin
 # CHECKERR: fish: Missing end to balance this begin
-# CHECKERR: begin
-# CHECKERR: ^~~~^
+# CHECKERR: {{^}}begin
+# CHECKERR: {{^}}^~~~^
 
 echo $status
 # CHECK: 127
 
 $fish -c 'echo \ufdd2"fart"'
 # CHECKERR: fish: Invalid token '\ufdd2"fart"'
-# CHECKERR: echo \ufdd2"fart"
-# CHECKERR: ^~~~~~~~~~~^
+# CHECKERR: {{^}}echo \ufdd2"fart"
+# CHECKERR: {{^}}     ^~~~~~~~~~~^
 
 echo (printf '\ufdd2foo') | string escape
 # CHECK: \Xef\Xb7\X92foo
