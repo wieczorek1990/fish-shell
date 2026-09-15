@@ -9945,6 +9945,9 @@ msgstr ""
 msgid "Calculate and display packet round-trip time"
 msgstr ""
 
+msgid "Calculate shared-library statistics"
+msgstr ""
+
 msgid "Calculate some improvement hints when combined with --templateMetrics"
 msgstr "Calculer certains indices d’amélioration si combiné avec « --templateMetrics »"
 
@@ -11194,6 +11197,9 @@ msgid "Choose a framework to show its packages"
 msgstr ""
 
 msgid "Choose a nominal bitrate to encode at"
+msgstr ""
+
+msgid "Choose an alternative source address"
 msgstr ""
 
 msgid "Choose application"
@@ -13452,6 +13458,9 @@ msgstr ""
 msgid "Count executions of source lines"
 msgstr ""
 
+msgid "Count hard links multiple times"
+msgstr ""
+
 msgid "Count hidden files, too"
 msgstr ""
 
@@ -15223,6 +15232,9 @@ msgid "Delete also modified configuration files and uninstalled packages from ca
 msgstr ""
 
 msgid "Delete an APFS Container and reformat disks to HFS"
+msgstr ""
+
+msgid "Delete an ARP entry"
 msgstr ""
 
 msgid "Delete an IOThread from the guest domain"
@@ -17505,6 +17517,9 @@ msgstr "Ignorer tous les éléments, sauf le dernier, du chemin de l’instantan
 msgid "Discard any transparency information"
 msgstr ""
 
+msgid "Discard characters that cannot be converted"
+msgstr ""
+
 msgid "Discard comments in statements"
 msgstr ""
 
@@ -17637,6 +17652,9 @@ msgstr "Afficher les informations sur l’environnement de RubyGems"
 msgid "Display Sphinx version"
 msgstr ""
 
+msgid "Display TTL value for each packet"
+msgstr ""
+
 msgid "Display Time Machine status"
 msgstr ""
 
@@ -17716,6 +17734,9 @@ msgid "Display actions without running"
 msgstr "Exécution à blanc : afficher les actions sans les exécuter"
 
 msgid "Display active subdomains only"
+msgstr ""
+
+msgid "Display all ARP entries"
 msgstr ""
 
 msgid "Display all MIB variables"
@@ -18672,6 +18693,9 @@ msgstr "Afficher l’historique des commandes du pool"
 msgid "Display pool event log"
 msgstr "Afficher le journal des événements d’un pool"
 
+msgid "Display process statistics"
+msgstr ""
+
 msgid "Display profile properties"
 msgstr ""
 
@@ -18746,6 +18770,9 @@ msgstr "Afficher l’état des fichiers extraits"
 
 msgid "Display summary"
 msgstr "Afficher le résumé"
+
+msgid "Display swap usage"
+msgstr ""
 
 msgid "Display syntax and command line options"
 msgstr ""
@@ -19374,6 +19401,9 @@ msgstr ""
 msgid "Do everything except actually send the updates"
 msgstr "Tout faire sauf l’envoi proprement dit des mises à jour"
 
+msgid "Do everything except the actual mount(2) system call"
+msgstr ""
+
 msgid "Do exhaustive model search (expensive!)"
 msgstr "Faire une recherche exhaustive de modèle (coûteux !)"
 
@@ -19583,6 +19613,9 @@ msgstr ""
 
 msgid "Do not cache the verification status of key signatures"
 msgstr "Ne pas mettre en cache l’état de la validation des signatures de clé"
+
+msgid "Do not calculate shared-library statistics"
+msgstr ""
 
 msgid "Do not call gensync (and the !commands in /etc/eix-sync.conf)"
 msgstr "Ne pas appeler gensync (ni les !commandes de /etc/eix-sync.conf)"
@@ -19998,8 +20031,14 @@ msgstr ""
 msgid "Do not follow mount points"
 msgstr ""
 
+msgid "Do not follow symbolic links in the destination"
+msgstr ""
+
 msgid "Do not follow symlinks"
 msgstr "Ne pas suivre les liens symboliques"
+
+msgid "Do not follow symlinks (default)"
+msgstr ""
 
 msgid "Do not follow symlinks (excluding dirs)"
 msgstr ""
@@ -20520,6 +20559,9 @@ msgstr ""
 msgid "Do not read startup.blend"
 msgstr ""
 
+msgid "Do not read the shell startup files"
+msgstr ""
+
 msgid "Do not really recreate the dep-cache"
 msgstr "Ne pas réellement re-créer le cache de dépendance"
 
@@ -20959,6 +21001,9 @@ msgid "Do not trap SIGQUIT or SIGTERM"
 msgstr ""
 
 msgid "Do not trap on integer division by zero"
+msgstr ""
+
+msgid "Do not traverse memory objects"
 msgstr ""
 
 msgid "Do not treat --- as the end of the commit message"
@@ -23679,6 +23724,9 @@ msgstr ""
 msgid "Edit files in $EDITOR"
 msgstr ""
 
+msgid "Edit files in place"
+msgstr ""
+
 msgid "Edit files in-place"
 msgstr "Éditer les fichiers sur place"
 
@@ -24792,6 +24840,9 @@ msgstr ""
 msgid "Enable socket level debugging"
 msgstr ""
 
+msgid "Enable socket-level debugging"
+msgstr ""
+
 msgid "Enable spanning across hosts"
 msgstr "Autoriser le changement d’hôte"
 
@@ -25662,7 +25713,13 @@ msgstr "Évaluer l’expression spécifiée sur un serveur Vim"
 msgid "Evaluate expr on nvim server specified with --server"
 msgstr ""
 
+msgid "Evaluate expression"
+msgstr ""
+
 msgid "Evaluate expression EXPR and exit"
+msgstr ""
+
+msgid "Evaluate file"
 msgstr ""
 
 msgid "Evaluate indexing information for path"
@@ -26940,6 +26997,9 @@ msgstr ""
 msgid "File system"
 msgstr "Type de système de fichiers"
 
+msgid "File system type"
+msgstr ""
+
 msgid "File system type to use in case of luks storage"
 msgstr ""
 
@@ -27681,6 +27741,9 @@ msgstr ""
 msgid "Follow FTP links from HTML documents"
 msgstr "Suivre les liens FTP des documents HTML"
 
+msgid "Follow all symlinks"
+msgstr ""
+
 msgid "Follow all symlinks Cancels -P option"
 msgstr ""
 
@@ -28386,6 +28449,9 @@ msgstr "Forcer le rebasage"
 msgid "Force the removal"
 msgstr ""
 
+msgid "Force the revocation of write access when downgrading a mount to read-only"
+msgstr ""
+
 msgid "Force the solver to find a solution (even an aggressive one)"
 msgstr ""
 
@@ -28424,6 +28490,9 @@ msgstr ""
 
 msgid "Force to use entire disk"
 msgstr "Forcer l’utilisation d’un périphérique non partitionné"
+
+msgid "Force unmount"
+msgstr ""
 
 msgid "Force unmount (in case of an unreachable NFS system)"
 msgstr "Forcer le démontage (dans le cas d’un système NFS injoignable)"
@@ -28613,6 +28682,9 @@ msgstr ""
 
 msgid "Fork process for each mount"
 msgstr "Utiliser un processus différent pour chaque montage"
+
+msgid "Fork the mount and return immediately"
+msgstr ""
 
 msgid "Fork the topmost patch"
 msgstr ""
@@ -31440,6 +31512,9 @@ msgstr ""
 msgid "If the standard input does not contain any nonblanks, do not run the command"
 msgstr ""
 
+msgid "If the target is a directory, remove it so the link can be created"
+msgstr ""
+
 msgid "If you want to choose a different composer.json or config.json"
 msgstr ""
 
@@ -33945,6 +34020,9 @@ msgstr "Conserver les dossiers de données et de cache"
 msgid "Keep the date of the original patch"
 msgstr ""
 
+msgid "Keep the existing mount properties"
+msgstr ""
+
 msgid "Keep the feature branch"
 msgstr ""
 
@@ -34115,6 +34193,9 @@ msgstr ""
 
 msgid "Launch GUI"
 msgstr "Démarrer l’interface graphique"
+
+msgid "Launch Xcode if needed"
+msgstr ""
 
 msgid "Launch a bug report session"
 msgstr ""
@@ -34392,6 +34473,9 @@ msgstr ""
 msgid "Limit  the number of matches"
 msgstr "Limiter le nombre d’occurrences"
 
+msgid "Limit -a to the given host"
+msgstr ""
+
 msgid "Limit I/O bandwidth; optional unit (KB/s default)"
 msgstr ""
 
@@ -34497,6 +34581,9 @@ msgstr ""
 msgid "Limit scope of variables in for-init-statement to the loop itself, like the C++ standard says"
 msgstr ""
 
+msgid "Limit scope to interface"
+msgstr ""
+
 msgid "Limit search scope using field index expressions"
 msgstr ""
 
@@ -34546,6 +34633,9 @@ msgid "Limit the number of concurrent operations"
 msgstr "Limiter le nombre d’opérations simultanées"
 
 msgid "Limit the number of files created"
+msgstr ""
+
+msgid "Limit the number of matches"
 msgstr ""
 
 msgid "Limit the number of packets used for storing captured packets in memory"
@@ -34606,6 +34696,9 @@ msgid "Limit to refs/heads"
 msgstr ""
 
 msgid "Limit to refs/tags"
+msgstr ""
+
+msgid "Limit to the given file system type"
 msgstr ""
 
 msgid "Limit transfer rate"
@@ -35625,6 +35718,9 @@ msgstr ""
 msgid "List encryption types"
 msgstr ""
 
+msgid "List entries in long format"
+msgstr ""
+
 msgid "List environments"
 msgstr ""
 
@@ -35830,6 +35926,9 @@ msgid "List information on LXD servers and containers."
 msgstr ""
 
 msgid "List ingress zones added"
+msgstr ""
+
+msgid "List inode information"
 msgstr ""
 
 msgid "List inode usage instead of block usage"
@@ -36106,6 +36205,9 @@ msgid "List only installed duplicate pkgs"
 msgstr ""
 
 msgid "List only installed pkgs without a corresponding binary pkg"
+msgstr ""
+
+msgid "List only local file systems"
 msgstr ""
 
 msgid "List only non-explicit packages (dependencies)"
@@ -37701,6 +37803,9 @@ msgstr "Rechercher le module spécifié (répétable)"
 msgid "Look for this as an additional keyword"
 msgstr ""
 
+msgid "Look up AS number for each hop"
+msgstr ""
+
 msgid "Look up specific packages for info on their cache entries"
 msgstr ""
 
@@ -39183,6 +39288,9 @@ msgstr ""
 msgid "Monitor given user"
 msgstr "Surveiller l’utilisateur spécifié"
 
+msgid "Monitor process ID"
+msgstr ""
+
 msgid "Monitor progress"
 msgstr ""
 
@@ -39239,6 +39347,9 @@ msgstr ""
 
 msgid "Mount all available ZFS filesystems"
 msgstr "Monter tous les systèmes de fichiers ZFS disponibles"
+
+msgid "Mount all file systems described in fstab"
+msgstr ""
 
 msgid "Mount an entire disk (all mountable volumes)"
 msgstr "Monter tous les volumes montables d’un disque"
@@ -40086,6 +40197,9 @@ msgstr ""
 msgid "Number of channels"
 msgstr "Nombre de canaux"
 
+msgid "Number of columns"
+msgstr ""
+
 msgid "Number of columns to keep right of highlighted substring"
 msgstr ""
 
@@ -40228,6 +40342,9 @@ msgid "Number of probe packets per hop"
 msgstr ""
 
 msgid "Number of probe packets sent out simultaneously"
+msgstr ""
+
+msgid "Number of processes"
 msgstr ""
 
 msgid "Number of proof entries to cache"
@@ -41160,6 +41277,9 @@ msgstr ""
 msgid "Open Vim inside another GTK widget"
 msgstr ""
 
+msgid "Open Xcode without activating it"
+msgstr ""
+
 msgid "Open a SQLite shell"
 msgstr ""
 
@@ -41202,6 +41322,9 @@ msgstr ""
 msgid "Open arguments as paths, even if they do not exist in the working copy"
 msgstr ""
 
+msgid "Open at the given line number"
+msgstr ""
+
 msgid "Open browser window for each started endpoint"
 msgstr ""
 
@@ -41237,6 +41360,9 @@ msgstr ""
 
 msgid "Open file"
 msgstr "Ouvrir le fichier"
+
+msgid "Open file(s) read-only"
+msgstr ""
 
 msgid "Open files"
 msgstr ""
@@ -44997,6 +45123,9 @@ msgstr ""
 msgid "Print a stack trace when exiting with a warning or fatal error"
 msgstr ""
 
+msgid "Print a summary of how many probes were unanswered"
+msgstr ""
+
 msgid "Print a summary of options"
 msgstr ""
 
@@ -46857,6 +46986,9 @@ msgstr ""
 msgid "Print the term for the old state"
 msgstr ""
 
+msgid "Print the user name associated with each process"
+msgstr ""
+
 msgid "Print the uuid of subvolumes (and snapshots)"
 msgstr ""
 
@@ -47758,6 +47890,9 @@ msgid "Produce execution error messages"
 msgstr ""
 
 msgid "Produce filenames as this string"
+msgstr ""
+
+msgid "Produce grand total"
 msgstr ""
 
 msgid "Produce less output to the terminal"
@@ -48867,6 +49002,9 @@ msgstr "Lire le diff depuis l’entrée standard"
 msgid "Read email message from stdin and add the sender"
 msgstr "Lire un email depuis l’entrée standard et ajouter son expéditeur"
 
+msgid "Read entries from file"
+msgstr ""
+
 msgid "Read exclude patterns from <file>; 1 per line"
 msgstr ""
 
@@ -48889,6 +49027,9 @@ msgid "Read filter from file"
 msgstr "Lire le filtre depuis le fichier spécifié"
 
 msgid "Read from disk (do not buffer)"
+msgstr ""
+
+msgid "Read from file"
 msgstr ""
 
 msgid "Read from stdin"
@@ -49166,6 +49307,9 @@ msgstr ""
 
 msgid "Read/Write mode"
 msgstr "Monter en lecture / écriture"
+
+msgid "Read/write mode"
+msgstr ""
 
 msgid "Reads a series of commands from an input batchfile"
 msgstr ""
@@ -49457,6 +49601,9 @@ msgstr ""
 
 msgid "Recursion (default for download)"
 msgstr "Opérer récursivement (par défaut lors des téléchargements)"
+
+msgid "Recursion limit"
+msgstr ""
 
 msgid "Recursive mode"
 msgstr "Mode récursif"
@@ -51588,6 +51735,9 @@ msgstr ""
 msgid "Report on mode of file"
 msgstr ""
 
+msgid "Report only for the named files"
+msgstr ""
+
 msgid "Report outstanding replies"
 msgstr ""
 
@@ -52995,6 +53145,9 @@ msgstr ""
 msgid "Round size of structs and unions up to multiple of this number of bits"
 msgstr ""
 
+msgid "Route packets through specified gateway"
+msgstr ""
+
 msgid "Route the packet through the specified gateway"
 msgstr ""
 
@@ -53853,6 +54006,9 @@ msgstr "Exécuter avec verbosité"
 msgid "Run vim on <display>"
 msgstr ""
 
+msgid "Run when the load average permits"
+msgstr ""
+
 msgid "Run wicd without the tray icon."
 msgstr ""
 
@@ -54184,6 +54340,9 @@ msgid "Same as -Wimplicit-int and -Wimplicit-function-declaration"
 msgstr "Identique à « -Wimplicit-int -Wimplicit-function-declaration »"
 
 msgid "Same as -b -d --login -p -r -t -T -u"
+msgstr ""
+
+msgid "Same as -b -d -l -p -r -t -T -u"
 msgstr ""
 
 msgid "Same as -d except an analysis file is written"
@@ -54856,6 +55015,9 @@ msgid "Search only in the specified repository"
 msgstr "Rechercher seulement dans le dépôt spécifié"
 
 msgid "Search only non-theme packages"
+msgstr ""
+
+msgid "Search only the given manual section"
 msgstr ""
 
 msgid "Search only themes"
@@ -56190,6 +56352,9 @@ msgstr ""
 msgid "Set a specific key or branch in the input document (edit mode)"
 msgstr ""
 
+msgid "Set a static ARP entry"
+msgstr ""
+
 msgid "Set a time-zone"
 msgstr ""
 
@@ -56258,6 +56423,9 @@ msgstr ""
 
 msgid "Set altroot for newpool and automatically import it"
 msgstr "Paramétrer altroot pour le nouveau pool, puis l’importer automatiquement"
+
+msgid "Set an ARP entry"
+msgstr ""
 
 msgid "Set an alias for a model"
 msgstr ""
@@ -56568,6 +56736,9 @@ msgstr ""
 msgid "Set default zone for connections and interfaces"
 msgstr ""
 
+msgid "Set delay between updates"
+msgstr ""
+
 msgid "Set delay in second between changing slides"
 msgstr ""
 
@@ -56581,6 +56752,9 @@ msgid "Set dependency lockfile mode to readonly"
 msgstr ""
 
 msgid "Set destination for ipv to address[/mask] in the permanent service"
+msgstr ""
+
+msgid "Set destination port"
 msgstr ""
 
 msgid "Set device alias"
@@ -56655,6 +56829,9 @@ msgstr ""
 msgid "Set escape character"
 msgstr ""
 
+msgid "Set event counting mode"
+msgstr ""
+
 msgid "Set executable"
 msgstr ""
 
@@ -56692,6 +56869,9 @@ msgid "Set filter"
 msgstr "Paramétrer le filtra"
 
 msgid "Set firmware variables from a text file"
+msgstr ""
+
+msgid "Set first TTL"
 msgstr ""
 
 msgid "Set font to print title on index"
@@ -56883,6 +57063,9 @@ msgstr ""
 msgid "Set max v8 stack size (bytes)"
 msgstr ""
 
+msgid "Set maximum TTL"
+msgstr ""
+
 msgid "Set maximum delay between commands"
 msgstr ""
 
@@ -57022,6 +57205,9 @@ msgid "Set number of pings to send"
 msgstr ""
 
 msgid "Set number of possible missed keepalive messages"
+msgstr ""
+
+msgid "Set number of probe packets per hop"
 msgstr ""
 
 msgid "Set number of retries to number"
@@ -58248,6 +58434,9 @@ msgstr ""
 msgid "Set timeout (seconds) waiting for finishing operations"
 msgstr ""
 
+msgid "Set timeout for response"
+msgstr ""
+
 msgid "Set timeout for test mode (minutes)"
 msgstr ""
 
@@ -58285,6 +58474,9 @@ msgid "Set two-letter country code"
 msgstr ""
 
 msgid "Set type of service"
+msgstr ""
+
+msgid "Set type-of-service"
 msgstr ""
 
 msgid "Set udev daemon log level"
@@ -59796,6 +59988,9 @@ msgstr ""
 msgid "Show file status, use lowercase letters for files marked as fsmonitor valid"
 msgstr ""
 
+msgid "Show file systems of specified type"
+msgstr ""
+
 msgid "Show file transfer stats"
 msgstr ""
 
@@ -60307,6 +60502,9 @@ msgid "Show more verbose output"
 msgstr ""
 
 msgid "Show multipart uploads"
+msgstr ""
+
+msgid "Show network addresses as numbers"
 msgstr ""
 
 msgid "Show network configuration files"
@@ -62412,6 +62610,9 @@ msgstr ""
 msgid "Skip mount checks, repair is not possible"
 msgstr ""
 
+msgid "Skip other file systems"
+msgstr ""
+
 msgid "Skip package installation for this run"
 msgstr ""
 
@@ -62640,6 +62841,9 @@ msgstr ""
 msgid "Sort by CPU usage"
 msgstr ""
 
+msgid "Sort by CPU usage, then CPU time"
+msgstr ""
+
 msgid "Sort by a column (ascending)"
 msgstr ""
 
@@ -62655,6 +62859,9 @@ msgstr ""
 msgid "Sort by extension"
 msgstr "Trier selon l’extension des entrées"
 
+msgid "Sort by key"
+msgstr ""
+
 msgid "Sort by memory usage"
 msgstr ""
 
@@ -62663,6 +62870,9 @@ msgstr ""
 
 msgid "Sort by random hash of keys"
 msgstr "Trier de façon aléatoire"
+
+msgid "Sort by secondary key"
+msgstr ""
 
 msgid "Sort by size"
 msgstr "Trier selon la taille"
@@ -64656,6 +64866,9 @@ msgstr ""
 msgid "Specify the access model for the thread local storage pointer"
 msgstr "Spécifier le modèle d’accès pour le pointeur de stockage local du processus léger"
 
+msgid "Specify the auth name"
+msgstr ""
+
 msgid "Specify the authentication ID for SASL bind"
 msgstr ""
 
@@ -66585,6 +66798,9 @@ msgstr ""
 msgid "Suppress warnings"
 msgstr "Masquer les avertissements"
 
+msgid "Suppress warnings about invalid characters"
+msgstr ""
+
 msgid "Suppress warnings/notices"
 msgstr ""
 
@@ -68193,6 +68409,9 @@ msgstr ""
 msgid "Thread count, for instance 2.0C where C is core multiplied"
 msgstr ""
 
+msgid "Threshold size"
+msgstr ""
+
 msgid "Threshold the image [value]"
 msgstr "Appliquer un seuil sur l’image [valeur]"
 
@@ -68407,6 +68626,9 @@ msgid "Today - N days backward"
 msgstr ""
 
 msgid "Today is [[[cc]yy]mm]dd]"
+msgstr ""
+
+msgid "Toggle IP checksums"
 msgstr ""
 
 msgid "Toggle a control"
@@ -68682,6 +68904,9 @@ msgstr ""
 msgid "Trash all qgroup numbers and scan the metadata again with the current config."
 msgstr ""
 
+msgid "Traverse memory objects"
+msgstr ""
+
 msgid "Traverse submodules recursively"
 msgstr "Opérer récursivement sur les sous-modules"
 
@@ -68732,6 +68957,9 @@ msgstr ""
 
 msgid "Treat exported or foreign devices as inactive"
 msgstr "Considérer les périphériques exportés ou étrangers comme inactifs"
+
+msgid "Treat file as a mount point"
+msgstr ""
 
 msgid "Treat filenames as Unicode strings"
 msgstr ""
@@ -69666,6 +69894,9 @@ msgstr "Démonter un montage SSH"
 msgid "Unmount all available ZFS filesystems"
 msgstr "Démonter tous les systèmes de fichiers ZFS disponibles"
 
+msgid "Unmount all mounted file systems"
+msgstr ""
+
 msgid "Unmount all mountpoints for the given device in the current namespaces"
 msgstr ""
 
@@ -69999,6 +70230,9 @@ msgstr ""
 msgid "Update options"
 msgstr ""
 
+msgid "Update options on an already-mounted file system"
+msgstr ""
+
 msgid "Update package indexes for repositories"
 msgstr ""
 
@@ -70045,6 +70279,9 @@ msgid "Update repositories. Use without arguments to update all autosync repos"
 msgstr ""
 
 msgid "Update repository indexes"
+msgstr ""
+
+msgid "Update shared-library statistics every N samples"
 msgstr ""
 
 msgid "Update sliding state window counters"
@@ -70500,6 +70737,9 @@ msgstr ""
 msgid "Use 1MB block size"
 msgstr ""
 
+msgid "Use 1kB block size"
+msgstr ""
+
 msgid "Use 32-bit \"float\""
 msgstr "Utiliser « float » sur 32 bits"
 
@@ -70792,6 +71032,9 @@ msgid "Use POSIX basic regexp for patterns"
 msgstr ""
 
 msgid "Use POSIX extended regexp for patterns"
+msgstr ""
+
+msgid "Use POSIX format"
 msgstr ""
 
 msgid "Use POST for all HTTP requests and send the specified data in the request body"
@@ -71111,6 +71354,12 @@ msgstr ""
 
 msgid "Use a specified .gemspec to create the Gemfile"
 msgstr "Utiliser un fichier .gemspec spécifié pour créer le fichier Gemfile"
+
+msgid "Use absolute event counting mode"
+msgstr ""
+
+msgid "Use accumulative event counting mode"
+msgstr ""
 
 msgid "Use active mode for data transfers"
 msgstr ""
@@ -71433,6 +71682,9 @@ msgstr ""
 msgid "Use default value when variable is missing"
 msgstr ""
 
+msgid "Use delta event counting mode"
+msgstr ""
+
 msgid "Use deprecated Adler32 instead of CRC32C for SCTP checksums"
 msgstr ""
 
@@ -71446,6 +71698,9 @@ msgid "Use device with given serial"
 msgstr ""
 
 msgid "Use device with given transport id"
+msgstr ""
+
+msgid "Use different DATABASE file"
 msgstr ""
 
 msgid "Use different DATABASE file[s]"
@@ -71781,6 +72036,9 @@ msgstr ""
 msgid "Use log file"
 msgstr ""
 
+msgid "Use logging mode with samples"
+msgstr ""
+
 msgid "Use login shell"
 msgstr ""
 
@@ -71803,6 +72061,9 @@ msgid "Use method to determine backup file names"
 msgstr ""
 
 msgid "Use minimal IO buffers"
+msgstr ""
+
+msgid "Use mmap for searching"
 msgstr ""
 
 msgid "Use modification times"
@@ -72217,6 +72478,9 @@ msgid "Use specified package for installation into venv, instead of creating an 
 msgstr ""
 
 msgid "Use specified plan file instead of current directory"
+msgstr ""
+
+msgid "Use specified protocol"
 msgstr ""
 
 msgid "Use specified queue"
@@ -73446,6 +73710,9 @@ msgstr "Attendre l’ouverture de l’obturateur, puis télécharger"
 msgid "Wait for standard input to become available before opening the SCSI driver"
 msgstr ""
 
+msgid "Wait for the document to close before exiting"
+msgstr ""
+
 msgid "Wait for the files to be closed before returning"
 msgstr ""
 
@@ -73679,6 +73946,9 @@ msgstr ""
 
 msgid "Warn if the compiler detects that code will never be executed"
 msgstr "Avertir lorsque le compilateur détecte qu’un fragment de code ne sera jamais exécuté"
+
+msgid "Warn if the source of a hard link cannot be linked"
+msgstr ""
 
 msgid "Warn if the type of main is suspicious"
 msgstr "Avertir si le type de « main » est douteux"
@@ -74597,6 +74867,9 @@ msgstr "Afficher des statistiques d’encodage et décodage à l’exécution"
 
 msgid "Write selection"
 msgstr "Écrire la sélection"
+
+msgid "Write size for all files"
+msgstr ""
 
 msgid "Write special status strings to the specified file descriptor"
 msgstr "Écrire les messages d’état dans le descripteur de fichier spécifié"
@@ -77483,6 +77756,9 @@ msgstr ""
 
 msgid "have tabs NUMBER characters apart, not 8"
 msgstr "Considérer que les tabulations comportent N caractères et non 8"
+
+msgid "have tabs this many characters apart, or use a comma separated list of tab positions"
+msgstr ""
 
 msgid "help for ollama"
 msgstr ""

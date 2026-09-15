@@ -1,9 +1,21 @@
 fish ?.?.? (released ???)
 =========================
 
+Deprecations and removed features
+---------------------------------
+- A function call now captures it's functions's definition before the pipeline is started, so it is no longer affected by other commands in the pipeline erasing or redefining the function.
+  For example, ``function sus; functions --erase sus; end; sus | sus`` now runs the same function twice (:issue:`12991`).
+  This change also prevents modifications to ``$fish_function_path`` in an earlier pipeline element from invalidating later calls to autoloaded functions (:issue:`12996`).
+
 Interactive improvements
 ------------------------
 - Completion options `--no-files` and `--force-files` on a wrapping command now take precedence over such options on the commands it wraps.
+- ``history clear`` empties the history file instead of deleting it, preventing future shells from reimporting bash history (:issue:`12976`).
+- Fixed a glitch in the initial prompt when the terminal is resized during early startup (:issue:`12995`).
+
+Scripting improvements
+----------------------
+- ``command``, ``builtin``, ``exec`` and ``time`` now accept a ``--`` separator between the keyword and the command name, so for example ``command -- -q`` runs a command literally called ``-q`` (:issue:`9941`).
 
 Regression fixes:
 -----------------
